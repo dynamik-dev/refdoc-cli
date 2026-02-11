@@ -27,10 +27,8 @@ refdocs chunks markdown at heading boundaries into 100-800 token pieces, indexes
 
 ## Install
 
-From GitHub Packages:
-
 ```bash
-npm install -g @dynamik-dev/refdocs --registry=https://npm.pkg.github.com
+npm install -g @dynamik-dev/refdocs
 ```
 
 Or build from source:
