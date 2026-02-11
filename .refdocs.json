@@ -1,0 +1,11 @@
+{
+  "paths": ["ref-docs"],
+  "index": ".refdocs-index.json",
+  "chunkMaxTokens": 800,
+  "chunkMinTokens": 100,
+  "boostFields": {
+    "title": 2,
+    "headings": 1.5,
+    "body": 1
+  }
+}

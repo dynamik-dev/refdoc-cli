@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.refdocs-index.json
+refdocs
+*.tsbuildinfo

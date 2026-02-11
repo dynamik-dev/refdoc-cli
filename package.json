@@ -1,0 +1,38 @@
+{
+  "name": "@dynamik-dev/refdocs",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Local CLI tool that indexes markdown documentation and exposes fast fuzzy search with intelligent chunking",
+  "main": "dist/src/index.js",
+  "bin": {
+    "refdocs": "dist/src/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "bun build --compile src/index.ts --outfile refdocs"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dynamik-dev/refdoc-cli.git"
+  },
+  "dependencies": {
+    "commander": "^13.1.0",
+    "mdast-util-from-markdown": "^2.0.2",
+    "minisearch": "^7.1.1",
+    "picomatch": "^4.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/picomatch": "^3.0.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}
