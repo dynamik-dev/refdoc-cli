@@ -34,7 +34,10 @@ export async function addFromUrl(
   const parsed = parseGitHubUrl(url);
   const branch = options.branch ?? parsed.branch ?? undefined;
   const token = options.token ?? process.env.GITHUB_TOKEN ?? undefined;
-  const localPath = options.path ?? `ref-docs/${parsed.repo}`;
+  const defaultPath = parsed.subpath
+    ? `ref-docs/${parsed.owner}/${parsed.repo}/${parsed.subpath}`
+    : `ref-docs/${parsed.owner}/${parsed.repo}`;
+  const localPath = options.path ?? defaultPath;
 
   const tarball = await downloadTarball(parsed.owner, parsed.repo, branch, token);
 
@@ -54,7 +57,7 @@ export async function addFromUrl(
     addedAt: new Date().toISOString(),
   };
 
-  const paths = config.paths.includes(localPath)
+  const paths = isPathCovered(config.paths, localPath)
     ? config.paths
     : [...config.paths, localPath];
 
@@ -215,6 +218,12 @@ export async function extractMarkdownFiles(
 function stripTarPrefix(entryName: string): string {
   const parts = entryName.split("/");
   return parts.slice(1).join("/");
+}
+
+export function isPathCovered(existingPaths: string[], newPath: string): boolean {
+  return existingPaths.some(
+    (p) => p === newPath || newPath.startsWith(p + "/"),
+  );
 }
 
 function upsertSource(sources: Source[], newSource: Source): Source[] {

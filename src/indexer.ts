@@ -26,7 +26,7 @@ export function findMarkdownFiles(dirs: string[], baseDir: string): string[] {
     walk(join(baseDir, dir));
   }
 
-  return files.sort();
+  return [...new Set(files)].sort();
 }
 
 export function buildIndex(config: RefdocsConfig, configDir: string): IndexSummary {

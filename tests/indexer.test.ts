@@ -62,6 +62,14 @@ describe("findMarkdownFiles", () => {
     const files = findMarkdownFiles(["docs"], tmpDir);
     expect(files).toEqual(["docs/a-file.md", "docs/m-file.md", "docs/z-file.md"]);
   });
+
+  it("deduplicates files from overlapping paths", () => {
+    mkdirSync(join(tmpDir, "docs", "sub"), { recursive: true });
+    writeFileSync(join(tmpDir, "docs", "root.md"), "# Root");
+    writeFileSync(join(tmpDir, "docs", "sub", "nested.md"), "# Nested");
+    const files = findMarkdownFiles(["docs", "docs/sub"], tmpDir);
+    expect(files).toEqual(["docs/root.md", "docs/sub/nested.md"]);
+  });
 });
 
 describe("buildIndex", () => {
@@ -94,6 +102,21 @@ describe("buildIndex", () => {
     writeFileSync(join(tmpDir, "docs", "b.md"), "# File B\n\nContent B about configuration and setup.\n");
     const summary = buildIndex(testConfig, tmpDir);
     expect(summary.filesIndexed).toBe(2);
+  });
+
+  it("handles overlapping paths without duplicate ID errors", () => {
+    mkdirSync(join(tmpDir, "docs", "sub"), { recursive: true });
+    writeFileSync(join(tmpDir, "docs", "root.md"), "# Root\n\nRoot content about widgets.\n");
+    writeFileSync(join(tmpDir, "docs", "sub", "nested.md"), "# Nested\n\nNested content about gadgets.\n");
+
+    const overlappingConfig: RefdocsConfig = {
+      ...testConfig,
+      paths: ["docs", "docs/sub"],
+    };
+
+    const summary = buildIndex(overlappingConfig, tmpDir);
+    expect(summary.filesIndexed).toBe(2);
+    expect(summary.chunksCreated).toBeGreaterThanOrEqual(2);
   });
 
   it("produces searchable index", () => {

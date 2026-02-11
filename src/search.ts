@@ -88,3 +88,13 @@ export function search(
     };
   });
 }
+
+export function mergeSearchResults(
+  local: SearchResult[],
+  global: SearchResult[],
+  maxResults: number,
+): SearchResult[] {
+  const combined = [...local, ...global];
+  combined.sort((a, b) => b.score - a.score);
+  return combined.slice(0, maxResults);
+}

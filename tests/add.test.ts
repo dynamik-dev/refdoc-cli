@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { readFileSync, mkdtempSync, rmSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { extractMarkdownFiles, updateSources, addLocalPath, removePath } from "../src/add.js";
+import { extractMarkdownFiles, updateSources, addLocalPath, removePath, isPathCovered } from "../src/add.js";
 import type { RefdocsConfig } from "../src/types.js";
 
 const FIXTURE_PATH = join(import.meta.dirname, "fixtures", "test-repo.tar.gz");
@@ -328,5 +328,97 @@ describe("removePath", () => {
     const result = removePath("nonexistent", tmpDir, baseConfig);
     expect(result.removed).toBe(false);
     expect(result.sourceRemoved).toBe(false);
+  });
+});
+
+describe("isPathCovered", () => {
+  it("returns true for exact match", () => {
+    expect(isPathCovered(["ref-docs"], "ref-docs")).toBe(true);
+  });
+
+  it("returns true when new path is a subdirectory of existing", () => {
+    expect(isPathCovered(["ref-docs"], "ref-docs/honojs/website/docs")).toBe(true);
+  });
+
+  it("returns false when new path is not covered", () => {
+    expect(isPathCovered(["docs"], "ref-docs/honojs")).toBe(false);
+  });
+
+  it("returns false when new path is a parent of existing", () => {
+    expect(isPathCovered(["ref-docs/honojs"], "ref-docs")).toBe(false);
+  });
+
+  it("returns false for shared prefix that is not parent-child", () => {
+    expect(isPathCovered(["ref-docs-v2"], "ref-docs")).toBe(false);
+    expect(isPathCovered(["ref-docs"], "ref-docs-v2")).toBe(false);
+  });
+
+  it("returns false for empty paths array", () => {
+    expect(isPathCovered([], "ref-docs")).toBe(false);
+  });
+});
+
+describe("addFromUrl overlapping paths", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "refdocs-overlap-"));
+    writeFileSync(join(tmpDir, ".refdocs.json"), JSON.stringify({
+      paths: ["ref-docs"],
+      index: ".refdocs-index.json",
+      chunkMaxTokens: 800,
+      chunkMinTokens: 100,
+      boostFields: { title: 2, headings: 1.5, body: 1 },
+    }));
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("does not add subpath when parent is already in paths", async () => {
+    const { addFromUrl } = await import("../src/add.js");
+
+    const config: RefdocsConfig = {
+      paths: ["ref-docs"],
+      index: ".refdocs-index.json",
+      chunkMaxTokens: 800,
+      chunkMinTokens: 100,
+      boostFields: { title: 2, headings: 1.5, body: 1 },
+    };
+
+    await addFromUrl(
+      "https://github.com/honojs/website/tree/main/docs",
+      { path: "ref-docs/honojs/website/docs" },
+      tmpDir,
+      config,
+    );
+
+    const saved = JSON.parse(readFileSync(join(tmpDir, ".refdocs.json"), "utf-8"));
+    expect(saved.paths).toEqual(["ref-docs"]);
+  });
+
+  it("adds path when not covered by existing paths", async () => {
+    const { addFromUrl } = await import("../src/add.js");
+
+    const config: RefdocsConfig = {
+      paths: ["docs"],
+      index: ".refdocs-index.json",
+      chunkMaxTokens: 800,
+      chunkMinTokens: 100,
+      boostFields: { title: 2, headings: 1.5, body: 1 },
+    };
+
+    writeFileSync(join(tmpDir, ".refdocs.json"), JSON.stringify(config));
+
+    await addFromUrl(
+      "https://github.com/honojs/website/tree/main/docs",
+      { path: "ref-docs/honojs/website/docs" },
+      tmpDir,
+      config,
+    );
+
+    const saved = JSON.parse(readFileSync(join(tmpDir, ".refdocs.json"), "utf-8"));
+    expect(saved.paths).toContain("ref-docs/honojs/website/docs");
   });
 });

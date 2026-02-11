@@ -1,5 +1,6 @@
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
+import { homedir } from "node:os";
 import type { RefdocsConfig, Source } from "./types.js";
 
 export const CONFIG_FILENAME = ".refdocs.json";
@@ -127,4 +128,43 @@ export function saveConfig(config: Partial<RefdocsConfig>, configDir: string): v
   }
   const merged = { ...existing, ...config };
   writeFileSync(configPath, JSON.stringify(merged, null, 2) + "\n", "utf-8");
+}
+
+let globalDirOverride: string | null = null;
+
+export function setGlobalDirOverride(dir: string | null): void {
+  globalDirOverride = dir;
+}
+
+export function getGlobalConfigDir(): string {
+  return globalDirOverride ?? join(homedir(), ".refdocs");
+}
+
+export function initGlobalConfig(): void {
+  const globalDir = getGlobalConfigDir();
+  mkdirSync(globalDir, { recursive: true });
+  const configPath = join(globalDir, CONFIG_FILENAME);
+  if (existsSync(configPath)) return;
+  const globalDefault: RefdocsConfig = {
+    ...DEFAULT_CONFIG,
+    paths: ["docs"],
+  };
+  writeFileSync(configPath, JSON.stringify(globalDefault, null, 2) + "\n", "utf-8");
+}
+
+export function loadGlobalConfig(): ConfigResult | null {
+  const globalDir = getGlobalConfigDir();
+  const configPath = join(globalDir, CONFIG_FILENAME);
+  if (!existsSync(configPath)) return null;
+  try {
+    const raw = JSON.parse(readFileSync(configPath, "utf-8"));
+    const errors = validateConfig(raw);
+    if (errors.length > 0) return null;
+    return {
+      config: { ...DEFAULT_CONFIG, ...raw, boostFields: { ...DEFAULT_CONFIG.boostFields, ...raw.boostFields } },
+      configDir: globalDir,
+    };
+  } catch {
+    return null;
+  }
 }
