@@ -8,11 +8,32 @@
 
 Index your markdown docs. Search them fast. Get back only what matters.
 
-Built for LLM coding agents that need token-conscious access to project documentation — no network calls, no API keys, no MCP servers. Just a single binary and a JSON index file.
+Built for LLM coding agents that need token-conscious access to project documentation — no network calls, no API keys, no MCP servers. Just a local CLI and a JSON index file.
+
+## Install
 
 ```bash
-$ refdocs search "database connections"
+npm install -g @dynamik-dev/refdocs
+```
 
+## Quick start
+
+```bash
+# Initialize config in your project
+cd your-project
+refdocs init
+
+# Add your docs (local path or GitHub URL)
+refdocs add ./docs
+refdocs add https://github.com/laravel/docs --branch 11.x
+
+# Search
+refdocs search "database connections"
+```
+
+Output:
+
+```
 # [1] config/database.md:12-34
 # Configuration > Database > Connections
 
@@ -31,33 +52,13 @@ is running and the host/port in your config matches...
 
 refdocs chunks markdown at heading boundaries into 100-800 token pieces, indexes them with fuzzy search, and returns only the relevant chunks — not entire files.
 
-## Install
+## Commands
 
 ```bash
-npm install -g @dynamik-dev/refdocs
-```
-
-Or build from source:
-
-```bash
-bun install && bun run build
-```
-
-Produces a standalone `./refdocs` binary. Or run directly:
-
-```bash
-bun src/index.ts <command>
-```
-
-## Usage
-
-```bash
-# Point at your docs directory
-echo '{ "paths": ["docs"] }' > .refdocs.json
-
-# Build the index
-refdocs index
-# Indexed 42 files -> 156 chunks (45.2 KB, 320ms)
+# Setup
+refdocs init                              # create .refdocs.json with defaults
+refdocs add ./docs                        # add a local docs directory
+refdocs add https://github.com/org/repo   # add docs from GitHub
 
 # Search
 refdocs search "authentication"
@@ -66,13 +67,12 @@ refdocs search "api" -f "api/**/*.md"     # filter by file glob
 refdocs search "hooks" --json             # structured output
 refdocs search "auth" --raw               # body only, for piping
 
-# Add docs from GitHub
-refdocs add https://github.com/laravel/docs --branch 11.x
-refdocs add https://github.com/statamic/docs/tree/6.x/content
-
-# Inspect the index
+# Manage
+refdocs index                             # rebuild the search index
 refdocs list                              # files and chunk counts
 refdocs info "api/auth.md"               # chunks in a specific file
+refdocs update                            # re-pull GitHub sources
+refdocs remove ref-docs/laravel           # remove a path from config
 ```
 
 ## How it works
