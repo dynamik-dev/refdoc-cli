@@ -163,6 +163,167 @@ Each line shows the line range, heading breadcrumb, and estimated token count.
 
 ---
 
+## `refdocs add <source>`
+
+Add a local directory or download markdown documentation from a GitHub repository.
+
+```bash
+# Local paths
+refdocs add ./my-docs
+refdocs add ./my-docs --no-index
+
+# GitHub URLs
+refdocs add https://github.com/laravel/docs --branch 11.x
+refdocs add https://github.com/statamic/docs/tree/6.x/content
+refdocs add https://github.com/owner/repo --path ref-docs/custom --no-index
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `source` | Local directory path or GitHub repository URL (required) |
+
+**Options:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--path <dir>` | `ref-docs/{repo}` | Override local storage directory (GitHub URLs only) |
+| `--branch <branch>` | from URL or `HEAD` | Override branch detection (GitHub URLs only) |
+| `--no-index` | `false` | Skip auto re-indexing after adding |
+
+**Local paths:**
+
+- The directory must exist and contain at least one `.md` file (including subdirectories)
+- The path is resolved relative to the project root and added to `paths` in `.refdocs.json`
+- Duplicate paths are silently skipped
+
+**GitHub URL formats:**
+
+- `https://github.com/owner/repo` — downloads all `.md` files from the repo
+- `https://github.com/owner/repo/tree/branch` — downloads from a specific branch
+- `https://github.com/owner/repo/tree/branch/path` — downloads only `.md` files under a subdirectory
+
+**Output (local path):**
+
+```
+Added my-docs to paths
+Indexed 12 files → 45 chunks
+```
+
+**Output (GitHub URL):**
+
+```
+Downloaded 47 markdown files → ref-docs/docs/
+Source: laravel/docs (11.x)
+Indexed 47 files → 156 chunks
+```
+
+**Behavior:**
+
+- If the source starts with `http://` or `https://`, it is treated as a GitHub URL
+- Otherwise, it is treated as a local directory path
+- For GitHub URLs: downloads the repo as a tarball, extracts `.md` files, tracks in `sources`
+- For local paths: verifies the directory exists with `.md` files, adds to `paths`
+- Automatically re-indexes unless `--no-index` is passed
+
+**Authentication (GitHub only):**
+
+For private repositories, set the `GITHUB_TOKEN` environment variable:
+
+```bash
+GITHUB_TOKEN=ghp_xxx refdocs add https://github.com/org/private-docs
+```
+
+**Errors:**
+
+- Local path not found: `Directory not found: ./nope`
+- No markdown files: `No .md files found in ./empty`
+- Non-GitHub URLs: `Only GitHub URLs are supported. Got: "gitlab.com"`
+- Missing repo: `Repository not found: owner/repo. Check the URL and ensure the repo is public or GITHUB_TOKEN is set.`
+
+---
+
+## `refdocs remove <path>`
+
+Remove a path from the index configuration.
+
+```bash
+refdocs remove ref-docs/laravel
+refdocs remove ./my-docs --no-index
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `path` | Path to remove from configured paths (required) |
+
+**Options:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--no-index` | `false` | Skip auto re-indexing after removal |
+
+**Output:**
+
+```
+Removed ref-docs/laravel from paths
+Removed associated source
+Indexed 12 files → 45 chunks
+```
+
+**Behavior:**
+
+- Removes the path from `paths` in `.refdocs.json`
+- If the path has an associated entry in `sources`, removes that too
+- Automatically re-indexes unless `--no-index` is passed
+- Does **not** delete the files on disk
+
+**Errors:**
+
+- Path not configured: `Path "nope" not found in configured paths.`
+
+---
+
+## `refdocs update`
+
+Re-pull all tracked sources from GitHub and re-index.
+
+```bash
+refdocs update
+refdocs update --no-index
+```
+
+**Options:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--no-index` | `false` | Skip auto re-indexing after update |
+
+**Output:**
+
+```
+Updated laravel/docs → 47 files
+Updated spatie/laravel-data → 23 files
+
+2 sources updated (70 files total)
+Indexed 70 files → 245 chunks
+```
+
+**Behavior:**
+
+- Iterates over all entries in `sources` from `.refdocs.json`
+- Downloads each repo as a tarball and extracts `.md` files, overwriting local copies
+- Automatically re-indexes unless `--no-index` is passed
+- Uses `GITHUB_TOKEN` env var for private repos
+
+**Errors:**
+
+- If no sources are configured: `No sources configured. Add a source first with 'refdocs add <url>'.`
+
+---
+
 ## Exit codes
 
 | Code | Meaning |

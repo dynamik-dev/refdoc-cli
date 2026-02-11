@@ -1,8 +1,8 @@
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
-import type { RefdocsConfig } from "./types.js";
+import type { RefdocsConfig, Source } from "./types.js";
 
-const CONFIG_FILENAME = ".refdocs.json";
+export const CONFIG_FILENAME = ".refdocs.json";
 
 const DEFAULT_CONFIG: RefdocsConfig = {
   paths: ["ref-docs"],
@@ -91,5 +91,28 @@ export function validateConfig(raw: unknown): string[] {
     }
   }
 
+  if (obj.sources !== undefined) {
+    if (!Array.isArray(obj.sources)) {
+      errors.push('"sources" must be an array');
+    } else {
+      for (let i = 0; i < obj.sources.length; i++) {
+        const s = obj.sources[i] as Record<string, unknown>;
+        if (typeof s !== "object" || s === null || Array.isArray(s)) {
+          errors.push(`"sources[${i}]" must be an object`);
+        }
+      }
+    }
+  }
+
   return errors;
+}
+
+export function saveConfig(config: Partial<RefdocsConfig>, configDir: string): void {
+  const configPath = join(configDir, CONFIG_FILENAME);
+  let existing: Record<string, unknown> = {};
+  if (existsSync(configPath)) {
+    existing = JSON.parse(readFileSync(configPath, "utf-8"));
+  }
+  const merged = { ...existing, ...config };
+  writeFileSync(configPath, JSON.stringify(merged, null, 2) + "\n", "utf-8");
 }

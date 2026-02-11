@@ -11,7 +11,10 @@ refdocs/
 │   ├── indexer.ts         # Walks target dir, chunks md files, builds search index
 │   ├── chunker.ts         # Splits markdown by heading hierarchy into right-sized chunks
 │   ├── search.ts          # MiniSearch wrapper, query + rank + format results
-│   └── config.ts          # Reads .refdocs.json config
+│   ├── config.ts          # Reads/writes .refdocs.json config
+│   ├── github.ts          # GitHub URL parsing + tarball download
+│   ├── add.ts             # Orchestration for `refdocs add` (download, extract, config update)
+│   └── types.ts           # Shared TypeScript interfaces
 ├── .refdocs.json          # Example config
 ├── package.json
 ├── tsconfig.json
@@ -50,6 +53,7 @@ refdocs/
 - `chunkMaxTokens` — upper bound for chunk size, rough estimate (chars / 4)
 - `chunkMinTokens` — minimum chunk size; merge small sections with their parent
 - `boostFields` — field relevance weights for search ranking
+- `sources` — (managed by `refdocs add`) tracks GitHub repos added for future updates
 
 ## CLI Commands
 
@@ -79,6 +83,34 @@ Fuzzy search the index and return the top chunks.
 - `--json` — output results as JSON array instead of formatted text
 - `--raw` — output chunk body only, no metadata header (for piping)
 
+### `refdocs add <source>`
+
+Add a local path or download markdown docs from a GitHub repository.
+
+- If source is a URL (`http://` or `https://`), download from GitHub as before
+- If source is a local path, verify it exists with `.md` files and add to `paths`
+- Update `.refdocs.json`: add path to `paths`, track source in `sources` (GitHub only)
+- Auto re-index unless `--no-index` is passed
+
+**Flags:**
+- `--path <dir>` — override local storage directory (default: `ref-docs/{repo}`, GitHub only)
+- `--branch <branch>` — override branch detection from URL (GitHub only)
+- `--no-index` — skip auto re-indexing after adding
+
+Auth via `GITHUB_TOKEN` env var for private repos.
+
+### `refdocs remove <path>`
+
+Remove a path from the index configuration.
+
+- Remove path from `paths` in `.refdocs.json`
+- If path has an associated source, remove from `sources` too
+- Auto re-index unless `--no-index` is passed
+- Does not delete files on disk
+
+**Flags:**
+- `--no-index` — skip auto re-indexing after removal
+
 ### `refdocs list`
 
 List all indexed files and their chunk counts. Useful for verifying what's in the index.
@@ -86,6 +118,17 @@ List all indexed files and their chunk counts. Useful for verifying what's in th
 ### `refdocs info <file>`
 
 Show all chunks for a specific file with their headings and token estimates.
+
+### `refdocs update`
+
+Re-pull all tracked sources from GitHub and re-index.
+
+- Iterates over `sources` in `.refdocs.json`
+- Downloads each repo tarball and extracts `.md` files, overwriting local copies
+- Auto re-index unless `--no-index` is passed
+
+**Flags:**
+- `--no-index` — skip auto re-indexing after update
 
 ## Chunking Strategy
 
@@ -156,8 +199,6 @@ JSON output (`--json`) returns:
 ## Future Considerations (not MVP)
 
 - `refdocs watch` — rebuild index on file change
-- `refdocs add <url>` — fetch a URL, convert to markdown, save to ref-docs
-- `refdocs update` — re-pull docs from configured upstream sources (git repos, URLs)
 - MCP server mode — expose search as an MCP tool for editors that prefer it
 - Token counting with tiktoken instead of chars/4 estimate
 - Embedding-based search as optional mode (would require onnxruntime or similar)

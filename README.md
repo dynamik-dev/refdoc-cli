@@ -1,5 +1,11 @@
 # refdocs
 
+![refdoc-cli](refdocs-cli.png)
+
+[![Tests](https://github.com/dynamik-dev/refdoc-cli/actions/workflows/test.yml/badge.svg)](https://github.com/dynamik-dev/refdoc-cli/actions/workflows/test.yml)
+[![Publish to npm](https://github.com/dynamik-dev/refdoc-cli/actions/workflows/publish.yml/badge.svg)](https://github.com/dynamik-dev/refdoc-cli/actions/workflows/publish.yml)
+[![npm](https://img.shields.io/npm/v/@dynamik-dev/refdocs)](https://www.npmjs.com/package/@dynamik-dev/refdocs)
+
 Index your markdown docs. Search them fast. Get back only what matters.
 
 Built for LLM coding agents that need token-conscious access to project documentation — no network calls, no API keys, no MCP servers. Just a single binary and a JSON index file.
@@ -60,6 +66,10 @@ refdocs search "api" -f "api/**/*.md"     # filter by file glob
 refdocs search "hooks" --json             # structured output
 refdocs search "auth" --raw               # body only, for piping
 
+# Add docs from GitHub
+refdocs add https://github.com/laravel/docs --branch 11.x
+refdocs add https://github.com/statamic/docs/tree/6.x/content
+
 # Inspect the index
 refdocs list                              # files and chunk counts
 refdocs info "api/auth.md"               # chunks in a specific file
@@ -105,5 +115,6 @@ All fields optional. See [Configuration](docs/configuration.md) for details.
 | [Commander](https://github.com/tj/commander.js) | CLI framework |
 | [mdast-util-from-markdown](https://github.com/syntax-tree/mdast-util-from-markdown) | Markdown AST parsing |
 | [picomatch](https://github.com/micromatch/picomatch) | Glob pattern matching |
+| [tar-stream](https://github.com/mafintosh/tar-stream) | Tarball extraction for `add` command |
 
 Zero external services. Works offline, in containers, on planes.

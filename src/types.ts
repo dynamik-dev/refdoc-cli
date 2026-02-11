@@ -1,3 +1,13 @@
+export interface Source {
+  url: string;
+  owner: string;
+  repo: string;
+  branch: string;
+  subpath: string;
+  localPath: string;
+  addedAt: string;
+}
+
 export interface RefdocsConfig {
   paths: string[];
   index: string;
@@ -8,6 +18,7 @@ export interface RefdocsConfig {
     headings: number;
     body: number;
   };
+  sources?: Source[];
 }
 
 export interface Chunk {

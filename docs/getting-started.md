@@ -38,6 +38,22 @@ The `refdocs` command is then available via `npx refdocs` or in package.json scr
 
 ## Quick start
 
+### Option A: Add docs from GitHub
+
+The fastest way to get started — pull docs directly from a GitHub repo:
+
+```bash
+refdocs add https://github.com/laravel/docs --branch 11.x
+```
+
+This downloads all markdown files, saves them to `ref-docs/docs/`, updates `.refdocs.json`, and builds the index automatically. Then search:
+
+```bash
+refdocs search "authentication"
+```
+
+### Option B: Index local docs
+
 1. **Create a config file** in your project root:
 
 ```bash

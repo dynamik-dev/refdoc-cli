@@ -3,3 +3,4 @@ dist/
 .refdocs-index.json
 refdocs
 *.tsbuildinfo
+ref-docs/

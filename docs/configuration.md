@@ -20,7 +20,18 @@ This means you can run `refdocs` from any subdirectory and it will find the proj
     "title": 2,
     "headings": 1.5,
     "body": 1
-  }
+  },
+  "sources": [
+    {
+      "url": "https://github.com/laravel/docs/tree/11.x",
+      "owner": "laravel",
+      "repo": "docs",
+      "branch": "11.x",
+      "subpath": "",
+      "localPath": "ref-docs/docs",
+      "addedAt": "2025-01-15T10:30:00.000Z"
+    }
+  ]
 }
 ```
 
@@ -92,6 +103,25 @@ Example: to make heading matches even more prominent:
   }
 }
 ```
+
+### `sources`
+
+- **Type:** `Source[]`
+- **Default:** `[]`
+
+Tracks GitHub repositories added via `refdocs add`. Each entry records the original URL, owner, repo, branch, subpath, local storage path, and when it was added. This is managed automatically by `refdocs add` — you don't need to edit it manually.
+
+Each source object has the following fields:
+
+| Field | Description |
+|-------|-------------|
+| `url` | Original GitHub URL passed to `refdocs add` |
+| `owner` | GitHub repository owner |
+| `repo` | GitHub repository name |
+| `branch` | Branch or ref that was downloaded |
+| `subpath` | Subdirectory filter within the repo (empty string for whole repo) |
+| `localPath` | Where the files were saved, relative to config |
+| `addedAt` | ISO 8601 timestamp of when the source was added |
 
 ## Validation
 
