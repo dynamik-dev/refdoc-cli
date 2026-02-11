@@ -250,7 +250,7 @@ function extractText(node: Content): string {
 function fileTitle(filePath?: string): string {
   if (!filePath) return "Untitled";
   const name = filePath.split("/").pop() || filePath;
-  return name.replace(/\.md$/i, "");
+  return name.replace(/\.(md|txt)$/i, "");
 }
 
 function makeChunk(

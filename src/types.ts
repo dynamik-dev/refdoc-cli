@@ -1,4 +1,5 @@
-export interface Source {
+export interface GitHubSource {
+  type: "github";
   url: string;
   owner: string;
   repo: string;
@@ -7,6 +8,24 @@ export interface Source {
   localPath: string;
   addedAt: string;
 }
+
+export interface FileSource {
+  type: "file";
+  url: string;
+  localPath: string;
+  addedAt: string;
+}
+
+export interface CrawlSource {
+  type: "crawl";
+  url: string;
+  scope: string;
+  localPath: string;
+  pagesCrawled: number;
+  addedAt: string;
+}
+
+export type Source = GitHubSource | FileSource | CrawlSource;
 
 export interface RefdocsConfig {
   paths: string[];

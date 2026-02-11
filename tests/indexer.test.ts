@@ -42,12 +42,12 @@ describe("findMarkdownFiles", () => {
     expect(files).toContain("docs/sub/nested.md");
   });
 
-  it("ignores non-md files", () => {
+  it("ignores non-md/txt files but includes .txt", () => {
     writeFileSync(join(tmpDir, "docs", "readme.md"), "# Hello");
     writeFileSync(join(tmpDir, "docs", "notes.txt"), "not markdown");
     writeFileSync(join(tmpDir, "docs", "data.json"), "{}");
     const files = findMarkdownFiles(["docs"], tmpDir);
-    expect(files).toEqual(["docs/readme.md"]);
+    expect(files).toEqual(["docs/notes.txt", "docs/readme.md"]);
   });
 
   it("returns empty array for missing directory", () => {

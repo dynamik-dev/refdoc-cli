@@ -103,6 +103,7 @@ describe("updateSources", () => {
       boostFields: { title: 2, headings: 1.5, body: 1 },
       sources: [
         {
+          type: "github",
           url: "https://github.com/test/repo",
           owner: "test",
           repo: "repo",
@@ -117,7 +118,10 @@ describe("updateSources", () => {
     const results = await updateSources(config, tmpDir);
     expect(results).toHaveLength(1);
     expect(results[0].filesWritten).toBe(3);
-    expect(results[0].source.owner).toBe("test");
+    expect(results[0].source.type).toBe("github");
+    if (results[0].source.type === "github") {
+      expect(results[0].source.owner).toBe("test");
+    }
 
     expect(existsSync(join(tmpDir, "ref-docs/test-repo", "guide.md"))).toBe(true);
     expect(existsSync(join(tmpDir, "ref-docs/test-repo", "api.md"))).toBe(true);
@@ -132,6 +136,7 @@ describe("updateSources", () => {
       boostFields: { title: 2, headings: 1.5, body: 1 },
       sources: [
         {
+          type: "github",
           url: "https://github.com/test/a",
           owner: "test",
           repo: "a",
@@ -141,6 +146,7 @@ describe("updateSources", () => {
           addedAt: "2025-01-01T00:00:00.000Z",
         },
         {
+          type: "github",
           url: "https://github.com/test/b",
           owner: "test",
           repo: "b",
@@ -171,7 +177,7 @@ describe("updateSources", () => {
   });
 });
 
-describe("config updates via addFromUrl", () => {
+describe("config updates via addFromGitHub", () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -285,6 +291,7 @@ describe("removePath", () => {
     boostFields: { title: 2, headings: 1.5, body: 1 },
     sources: [
       {
+        type: "github",
         url: "https://github.com/laravel/docs",
         owner: "laravel",
         repo: "docs",
@@ -358,7 +365,7 @@ describe("isPathCovered", () => {
   });
 });
 
-describe("addFromUrl overlapping paths", () => {
+describe("addFromGitHub overlapping paths", () => {
   let tmpDir: string;
 
   beforeEach(() => {
@@ -377,7 +384,7 @@ describe("addFromUrl overlapping paths", () => {
   });
 
   it("does not add subpath when parent is already in paths", async () => {
-    const { addFromUrl } = await import("../src/add.js");
+    const { addFromGitHub } = await import("../src/add.js");
 
     const config: RefdocsConfig = {
       paths: ["ref-docs"],
@@ -387,7 +394,7 @@ describe("addFromUrl overlapping paths", () => {
       boostFields: { title: 2, headings: 1.5, body: 1 },
     };
 
-    await addFromUrl(
+    await addFromGitHub(
       "https://github.com/honojs/website/tree/main/docs",
       { path: "ref-docs/honojs/website/docs" },
       tmpDir,
@@ -399,7 +406,7 @@ describe("addFromUrl overlapping paths", () => {
   });
 
   it("adds path when not covered by existing paths", async () => {
-    const { addFromUrl } = await import("../src/add.js");
+    const { addFromGitHub } = await import("../src/add.js");
 
     const config: RefdocsConfig = {
       paths: ["docs"],
@@ -411,7 +418,7 @@ describe("addFromUrl overlapping paths", () => {
 
     writeFileSync(join(tmpDir, ".refdocs.json"), JSON.stringify(config));
 
-    await addFromUrl(
+    await addFromGitHub(
       "https://github.com/honojs/website/tree/main/docs",
       { path: "ref-docs/honojs/website/docs" },
       tmpDir,
