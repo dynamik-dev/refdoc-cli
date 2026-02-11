@@ -57,6 +57,10 @@ refdocs/
 
 ## CLI Commands
 
+### `refdocs init`
+
+Create a `.refdocs.json` config file with full defaults. Errors if the file already exists. Also auto-runs when `refdocs add` is called without an existing config.
+
 ### `refdocs index`
 
 Walk all configured paths, chunk every `.md` file, build and persist the MiniSearch index.

@@ -107,6 +107,18 @@ export function validateConfig(raw: unknown): string[] {
   return errors;
 }
 
+export function configExists(configDir: string): boolean {
+  return existsSync(join(configDir, CONFIG_FILENAME));
+}
+
+export function initConfig(configDir: string): void {
+  const configPath = join(configDir, CONFIG_FILENAME);
+  if (existsSync(configPath)) {
+    throw new Error(`${CONFIG_FILENAME} already exists in ${configDir}`);
+  }
+  writeFileSync(configPath, JSON.stringify(DEFAULT_CONFIG, null, 2) + "\n", "utf-8");
+}
+
 export function saveConfig(config: Partial<RefdocsConfig>, configDir: string): void {
   const configPath = join(configDir, CONFIG_FILENAME);
   let existing: Record<string, unknown> = {};

@@ -9,6 +9,36 @@ refdocs --version  Show version number
 
 ---
 
+## `refdocs init`
+
+Create a `.refdocs.json` config file with default settings.
+
+```bash
+refdocs init
+```
+
+Writes `.refdocs.json` in the current directory with the full default configuration (paths, index location, chunk sizes, boost fields).
+
+**Output:**
+
+```
+Created .refdocs.json with default configuration.
+```
+
+**Behavior:**
+
+- Creates `.refdocs.json` in the current working directory
+- Includes all default values: `paths`, `index`, `chunkMaxTokens`, `chunkMinTokens`, `boostFields`
+- If `.refdocs.json` already exists, exits with an error
+
+**Errors:**
+
+- Config already exists: `.refdocs.json already exists in /path/to/dir`
+
+**Note:** Running `refdocs add` will automatically initialize `.refdocs.json` if it doesn't exist.
+
+---
+
 ## `refdocs index`
 
 Build the search index from all markdown files in configured paths.

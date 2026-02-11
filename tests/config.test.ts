@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { loadConfig, validateConfig } from "../src/config.js";
+import { readFileSync, existsSync } from "node:fs";
+import { loadConfig, validateConfig, configExists, initConfig, CONFIG_FILENAME } from "../src/config.js";
 
 describe("validateConfig", () => {
   it("returns no errors for valid config", () => {
@@ -129,5 +130,56 @@ describe("loadConfig", () => {
       JSON.stringify({ paths: "not-an-array" })
     );
     expect(() => loadConfig(tmpDir)).toThrow("Invalid .refdocs.json");
+  });
+});
+
+describe("configExists", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "refdocs-test-"));
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("returns false when no config file exists", () => {
+    expect(configExists(tmpDir)).toBe(false);
+  });
+
+  it("returns true when config file exists", () => {
+    writeFileSync(join(tmpDir, CONFIG_FILENAME), "{}");
+    expect(configExists(tmpDir)).toBe(true);
+  });
+});
+
+describe("initConfig", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), "refdocs-test-"));
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("creates .refdocs.json with full defaults", () => {
+    initConfig(tmpDir);
+    const configPath = join(tmpDir, CONFIG_FILENAME);
+    expect(existsSync(configPath)).toBe(true);
+
+    const written = JSON.parse(readFileSync(configPath, "utf-8"));
+    expect(written.paths).toEqual(["ref-docs"]);
+    expect(written.index).toBe(".refdocs-index.json");
+    expect(written.chunkMaxTokens).toBe(800);
+    expect(written.chunkMinTokens).toBe(100);
+    expect(written.boostFields).toEqual({ title: 2, headings: 1.5, body: 1 });
+  });
+
+  it("throws if config already exists", () => {
+    writeFileSync(join(tmpDir, CONFIG_FILENAME), "{}");
+    expect(() => initConfig(tmpDir)).toThrow(".refdocs.json already exists");
   });
 });

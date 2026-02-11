@@ -2,7 +2,7 @@
 
 import { Command } from "commander";
 import { join } from "node:path";
-import { loadConfig } from "./config.js";
+import { loadConfig, configExists, initConfig } from "./config.js";
 import { buildIndex, loadPersistedIndex } from "./indexer.js";
 import { search } from "./search.js";
 import { addFromUrl, addLocalPath, removePath, updateSources } from "./add.js";
@@ -13,7 +13,20 @@ const program = new Command();
 program
   .name("refdocs")
   .description("Local CLI tool for indexing and searching markdown documentation")
-  .version("0.1.0");
+  .version("0.3.0");
+
+program
+  .command("init")
+  .description("Create a .refdocs.json config file with defaults")
+  .action(() => {
+    try {
+      initConfig(process.cwd());
+      console.log("Created .refdocs.json with default configuration.");
+    } catch (err) {
+      console.error((err as Error).message);
+      process.exit(1);
+    }
+  });
 
 program
   .command("index")
@@ -128,6 +141,11 @@ program
   .option("--no-index", "skip auto re-indexing after download")
   .action(async (source: string, opts: { path?: string; branch?: string; index: boolean }) => {
     try {
+      const cwd = process.cwd();
+      if (!configExists(cwd)) {
+        initConfig(cwd);
+        console.log("Initialized .refdocs.json with default configuration.");
+      }
       const { config, configDir } = loadConfig();
       const isUrl = source.startsWith("http://") || source.startsWith("https://");
 

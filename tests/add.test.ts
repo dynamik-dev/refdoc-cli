@@ -77,7 +77,8 @@ vi.mock("../src/github.js", async (importOriginal) => {
   return {
     ...actual,
     downloadTarball: vi.fn(async () => {
-      return readFileSync(FIXTURE_PATH).buffer;
+      const buf = readFileSync(FIXTURE_PATH);
+      return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
     }),
   };
 });
