@@ -33,7 +33,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function normalizeUrl(raw: string): string {
+export function normalizeUrl(raw: string): string {
   try {
     const u = new URL(raw);
     u.hash = "";
@@ -47,7 +47,7 @@ function normalizeUrl(raw: string): string {
   }
 }
 
-function isSubPath(candidate: string, scope: string): boolean {
+export function isSubPath(candidate: string, scope: string): boolean {
   const candidateUrl = new URL(candidate);
   const scopeUrl = new URL(scope);
   if (candidateUrl.origin !== scopeUrl.origin) return false;
@@ -60,7 +60,7 @@ function isSubPath(candidate: string, scope: string): boolean {
   );
 }
 
-function urlToFilePath(pageUrl: string): string {
+export function urlToFilePath(pageUrl: string): string {
   const u = new URL(pageUrl);
   let path = u.pathname;
   if (path.endsWith("/")) path = path + "index";
@@ -79,7 +79,7 @@ function urlToFilePath(pageUrl: string): string {
   return path;
 }
 
-function htmlToMarkdown(html: string, url: string): string {
+export function htmlToMarkdown(html: string, url: string): string {
   const dom = new JSDOM(html, { url });
   const reader = new Readability(dom.window.document);
   const article = reader.parse();
@@ -103,7 +103,7 @@ function htmlToMarkdown(html: string, url: string): string {
   return turndown.turndown(html);
 }
 
-function discoverLinks(html: string, pageUrl: string, scope: string): string[] {
+export function discoverLinks(html: string, pageUrl: string, scope: string): string[] {
   const $ = cheerio.load(html);
   const links: string[] = [];
   const base = new URL(pageUrl);
