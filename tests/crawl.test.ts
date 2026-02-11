@@ -357,13 +357,13 @@ describe("crawlSite", () => {
 
   it("skips 404 pages without failing", async () => {
     // Override to make one page 404
-    vi.mocked(fetch).mockImplementation(async (url: string) => {
-      const input = typeof url === "string" ? url : url.toString();
-      const normalized = input.replace(/\/$/, "");
+    vi.mocked(fetch).mockImplementation(async (input: string | URL | Request) => {
+      const url = typeof input === "string" ? input : input.toString();
+      const normalized = url.replace(/\/$/, "");
       if (normalized === "https://example.com/docs/api") {
         return { ok: false, status: 404, headers: new Headers() } as Response;
       }
-      const entry = SITE_MAP[normalized] ?? SITE_MAP[input];
+      const entry = SITE_MAP[normalized] ?? SITE_MAP[url];
       if (!entry) {
         return { ok: false, status: 404, headers: new Headers() } as Response;
       }
@@ -384,9 +384,9 @@ describe("crawlSite", () => {
   });
 
   it("skips non-HTML responses", async () => {
-    vi.mocked(fetch).mockImplementation(async (url: string) => {
-      const input = typeof url === "string" ? url : url.toString();
-      const normalized = input.replace(/\/$/, "");
+    vi.mocked(fetch).mockImplementation(async (input: string | URL | Request) => {
+      const url = typeof input === "string" ? input : input.toString();
+      const normalized = url.replace(/\/$/, "");
       if (normalized === "https://example.com/docs/getting-started") {
         return {
           ok: true,
@@ -395,7 +395,7 @@ describe("crawlSite", () => {
           text: async () => "{}",
         } as unknown as Response;
       }
-      const entry = SITE_MAP[normalized] ?? SITE_MAP[input];
+      const entry = SITE_MAP[normalized] ?? SITE_MAP[url];
       if (!entry) {
         return { ok: false, status: 404, headers: new Headers() } as Response;
       }
