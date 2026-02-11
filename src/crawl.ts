@@ -207,7 +207,11 @@ export async function crawlSite(
   outputDir: string,
   options?: Partial<CrawlOptions>,
 ): Promise<CrawlResult> {
-  const opts = { ...DEFAULT_CRAWL_OPTIONS, ...options };
+  const opts: CrawlOptions = {
+    maxPages: options?.maxPages ?? DEFAULT_CRAWL_OPTIONS.maxPages,
+    depth: options?.depth ?? DEFAULT_CRAWL_OPTIONS.depth,
+    delayMs: options?.delayMs ?? DEFAULT_CRAWL_OPTIONS.delayMs,
+  };
   const scope = normalizeUrl(startUrl);
   const visited = new Set<string>();
   const queue: { url: string; depth: number }[] = [{ url: scope, depth: 0 }];
