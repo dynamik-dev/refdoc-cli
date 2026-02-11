@@ -1,6 +1,6 @@
 # refdocs
 
-![refdoc-cli](refdocs-cli.png)
+![refdoc-cli](refdoc-cli.png)
 
 [![Tests](https://github.com/dynamik-dev/refdoc-cli/actions/workflows/test.yml/badge.svg)](https://github.com/dynamik-dev/refdoc-cli/actions/workflows/test.yml)
 [![Publish to npm](https://github.com/dynamik-dev/refdoc-cli/actions/workflows/publish.yml/badge.svg)](https://github.com/dynamik-dev/refdoc-cli/actions/workflows/publish.yml)
