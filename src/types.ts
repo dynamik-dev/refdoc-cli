@@ -16,16 +16,7 @@ export interface FileSource {
   addedAt: string;
 }
 
-export interface CrawlSource {
-  type: "crawl";
-  url: string;
-  scope: string;
-  localPath: string;
-  pagesCrawled: number;
-  addedAt: string;
-}
-
-export type Source = GitHubSource | FileSource | CrawlSource;
+export type Source = GitHubSource | FileSource;
 
 export interface RefdocsConfig {
   paths: string[];
@@ -69,4 +60,9 @@ export interface IndexSummary {
   chunksCreated: number;
   indexSizeBytes: number;
   elapsedMs: number;
+  // Present only for incremental builds
+  unchanged?: number;
+  added?: number;
+  changed?: number;
+  removed?: number;
 }

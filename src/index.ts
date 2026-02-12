@@ -1,21 +1,25 @@
 #!/usr/bin/env node
 
-import { Command } from "commander";
+import { Command, InvalidArgumentError } from "commander";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
 import { loadConfig, configExists, initConfig, loadGlobalConfig, initGlobalConfig, getGlobalConfigDir } from "./config.js";
-import { buildIndex, loadPersistedIndex } from "./indexer.js";
-import { search, mergeSearchResults } from "./search.js";
-import { addFromGitHub, addFromFileUrl, addFromCrawl, addLocalPath, removePath, updateSources } from "./add.js";
-import { isGitHubUrl, isTextFileUrl } from "./crawl.js";
+import { buildAndPersistIndex, loadPersistedIndex } from "./indexer.js";
+import { searchAllIndexes } from "./search.js";
+import type { IndexSource } from "./search.js";
+import { addFromGitHub, addLocalPath, removePath, updateSources } from "./add.js";
 import type { SearchResult } from "./types.js";
+
+const require = createRequire(import.meta.url);
+const { version } = require("../package.json");
 
 const program = new Command();
 
 program
   .name("refdocs")
   .description("Local CLI tool for indexing and searching markdown documentation")
-  .version("0.5.1");
+  .version(version);
 
 program
   .command("init")
@@ -40,7 +44,8 @@ program
   .command("index")
   .description("Index all markdown files in configured paths")
   .option("-g, --global", "index the global config")
-  .action((opts: { global?: boolean }) => {
+  .option("--full", "force a full rebuild (skip incremental)")
+  .action((opts: { global?: boolean; full?: boolean }) => {
     try {
       if (opts.global) {
         const globalResult = loadGlobalConfig();
@@ -48,16 +53,12 @@ program
           console.error("No global config found. Run `refdocs init --global` first.");
           process.exit(1);
         }
-        const summary = buildIndex(globalResult.config, globalResult.configDir);
-        console.log(`[global] Indexed ${summary.filesIndexed} files → ${summary.chunksCreated} chunks`);
-        console.log(`Index size: ${(summary.indexSizeBytes / 1024).toFixed(1)} KB`);
-        console.log(`Done in ${summary.elapsedMs}ms`);
+        const summary = buildAndPersistIndex(globalResult.config, globalResult.configDir, { force: opts.full });
+        printIndexSummary(summary, "[global] ");
       } else {
         const { config, configDir } = loadConfig();
-        const summary = buildIndex(config, configDir);
-        console.log(`Indexed ${summary.filesIndexed} files → ${summary.chunksCreated} chunks`);
-        console.log(`Index size: ${(summary.indexSizeBytes / 1024).toFixed(1)} KB`);
-        console.log(`Done in ${summary.elapsedMs}ms`);
+        const summary = buildAndPersistIndex(config, configDir, { force: opts.full });
+        printIndexSummary(summary, "");
       }
     } catch (err) {
       console.error((err as Error).message);
@@ -68,52 +69,23 @@ program
 program
   .command("search <query>")
   .description("Fuzzy search the index and return top chunks")
-  .option("-n, --results <count>", "number of results", "3")
+  .option("-n, --results <count>", "number of results (1-10)", (value: string) => {
+    const n = parseInt(value, 10);
+    if (isNaN(n) || n < 1 || n > 10) {
+      throw new InvalidArgumentError(`Invalid value "${value}". Must be a number between 1 and 10.`);
+    }
+    return n;
+  }, 3)
   .option("-f, --file <pattern>", "filter results to files matching glob")
   .option("--json", "output as JSON")
   .option("--raw", "output chunk body only, no metadata")
-  .action((query: string, opts: { results: string; file?: string; json?: boolean; raw?: boolean }) => {
+  .action((query: string, opts: { results: number; file?: string; json?: boolean; raw?: boolean }) => {
     try {
-      const maxResults = Math.min(Math.max(1, parseInt(opts.results, 10) || 3), 10);
-      let localResults: SearchResult[] = [];
-      let hasLocalIndex = false;
-      let localError: Error | null = null;
-
-      try {
-        const { config, configDir } = loadConfig();
-        const indexPath = join(configDir, config.index);
-        const { index } = loadPersistedIndex(indexPath, config);
-        hasLocalIndex = true;
-        localResults = search(index, query, { maxResults, fileFilter: opts.file });
-      } catch (err) {
-        localError = err as Error;
-      }
-
-      let globalResults: SearchResult[] = [];
-      let hasGlobalIndex = false;
-      const globalConfig = loadGlobalConfig();
-      if (globalConfig) {
-        const globalIndexPath = join(globalConfig.configDir, globalConfig.config.index);
-        if (existsSync(globalIndexPath)) {
-          try {
-            const { index: globalIndex } = loadPersistedIndex(globalIndexPath, globalConfig.config);
-            hasGlobalIndex = true;
-            globalResults = search(globalIndex, query, { maxResults, fileFilter: opts.file });
-            globalResults = globalResults.map((r) => ({
-              ...r,
-              file: `[global] ${r.file}`,
-            }));
-          } catch {
-            // Global index exists but failed to load, skip
-          }
-        }
-      }
-
-      if (!hasLocalIndex && !hasGlobalIndex) {
-        throw localError ?? new Error("Index not found. Run `refdocs index` first.");
-      }
-
-      const results = mergeSearchResults(localResults, globalResults, maxResults);
+      const sources = resolveIndexSources();
+      const results = searchAllIndexes(sources, query, {
+        maxResults: opts.results,
+        fileFilter: opts.file,
+      });
 
       if (results.length === 0) {
         console.log("No results found.");
@@ -217,21 +189,15 @@ interface AddOpts {
   branch?: string;
   index: boolean;
   global?: boolean;
-  crawl?: boolean;
-  maxPages?: string;
-  depth?: string;
 }
 
 program
   .command("add <source>")
-  .description("Add docs from a local path, GitHub URL, file URL, or crawled website")
+  .description("Add docs from a local path or GitHub URL")
   .option("--path <dir>", "override local storage directory")
   .option("--branch <branch>", "override branch detection from URL")
   .option("--no-index", "skip auto re-indexing after download")
   .option("-g, --global", "store docs in global ~/.refdocs/ directory")
-  .option("--crawl", "crawl a website and convert pages to markdown")
-  .option("--max-pages <count>", "max pages to crawl (default: 200)")
-  .option("--depth <levels>", "max crawl depth (default: 3)")
   .action(async (source: string, opts: AddOpts) => {
     try {
       const isUrl = source.startsWith("http://") || source.startsWith("https://");
@@ -264,26 +230,7 @@ program
 
       const label = opts.global ? "[global] " : "";
 
-      if (isUrl && opts.crawl) {
-        // Crawl mode: spider the site and convert to markdown
-        const maxPages = opts.maxPages ? parseInt(opts.maxPages, 10) : undefined;
-        const depth = opts.depth ? parseInt(opts.depth, 10) : undefined;
-
-        console.log(`Crawling ${source}...`);
-        const result = await addFromCrawl(
-          source,
-          { path: opts.path, maxPages, depth },
-          configDir,
-          config,
-        );
-
-        console.log(`${label}Converted ${result.filesWritten} pages → ${result.localPath}/`);
-
-        if (opts.index && result.filesWritten > 0) {
-          reindex(opts.global, label);
-        }
-      } else if (isUrl && isGitHubUrl(source)) {
-        // GitHub mode: download tarball
+      if (isUrl) {
         const result = await addFromGitHub(
           source,
           { path: opts.path, branch: opts.branch },
@@ -299,37 +246,7 @@ program
         if (opts.index && result.filesWritten > 0) {
           reindex(opts.global, label);
         }
-      } else if (isUrl && isTextFileUrl(source)) {
-        // Single file URL mode (.md or .txt)
-        const result = await addFromFileUrl(
-          source,
-          { path: opts.path },
-          configDir,
-          config,
-        );
-
-        console.log(`${label}Downloaded 1 file → ${result.localPath}`);
-
-        if (opts.index && result.filesWritten > 0) {
-          reindex(opts.global, label);
-        }
-      } else if (isUrl) {
-        // Single page crawl: fetch HTML and convert to markdown
-        console.log(`Crawling ${source}...`);
-        const result = await addFromCrawl(
-          source,
-          { path: opts.path, maxPages: 1, depth: 0 },
-          configDir,
-          config,
-        );
-
-        console.log(`${label}Converted ${result.filesWritten} page → ${result.localPath}/`);
-
-        if (opts.index && result.filesWritten > 0) {
-          reindex(opts.global, label);
-        }
       } else {
-        // Local path mode
         const result = addLocalPath(source, configDir, config);
         console.log(`Added ${result.localPath} to paths`);
 
@@ -426,17 +343,28 @@ program
     }
   });
 
+import type { IndexSummary } from "./types.js";
+
+function printIndexSummary(summary: IndexSummary, label: string) {
+  console.log(`${label}Indexed ${summary.filesIndexed} files → ${summary.chunksCreated} chunks`);
+  if (summary.unchanged !== undefined) {
+    console.log(`${label}(${summary.unchanged} unchanged, ${summary.changed} changed, ${summary.added} added, ${summary.removed} removed)`);
+  }
+  console.log(`Index size: ${(summary.indexSizeBytes / 1024).toFixed(1)} KB`);
+  console.log(`Done in ${summary.elapsedMs}ms`);
+}
+
 function reindex(global: boolean | undefined, label: string) {
   if (global) {
     const freshGlobal = loadGlobalConfig();
     if (freshGlobal) {
-      const summary = buildIndex(freshGlobal.config, freshGlobal.configDir);
-      console.log(`${label}Indexed ${summary.filesIndexed} files → ${summary.chunksCreated} chunks`);
+      const summary = buildAndPersistIndex(freshGlobal.config, freshGlobal.configDir);
+      printIndexSummary(summary, label);
     }
   } else {
     const { config: freshConfig, configDir: freshDir } = loadConfig();
-    const summary = buildIndex(freshConfig, freshDir);
-    console.log(`Indexed ${summary.filesIndexed} files → ${summary.chunksCreated} chunks`);
+    const summary = buildAndPersistIndex(freshConfig, freshDir);
+    printIndexSummary(summary, "");
   }
 }
 
@@ -448,9 +376,35 @@ function formatSourceDescription(source: Source): string {
       return `${source.owner}/${source.repo}`;
     case "file":
       return source.url;
-    case "crawl":
-      return source.url;
   }
+}
+
+function resolveIndexSources(): IndexSource[] {
+  const sources: IndexSource[] = [];
+
+  try {
+    const { config, configDir } = loadConfig();
+    const indexPath = join(configDir, config.index);
+    const { index, chunkMap } = loadPersistedIndex(indexPath, config);
+    sources.push({ label: "", index, chunkMap });
+  } catch {
+    // Local index not available
+  }
+
+  const globalConfig = loadGlobalConfig();
+  if (globalConfig) {
+    const globalIndexPath = join(globalConfig.configDir, globalConfig.config.index);
+    if (existsSync(globalIndexPath)) {
+      try {
+        const { index, chunkMap } = loadPersistedIndex(globalIndexPath, globalConfig.config);
+        sources.push({ label: "[global] ", index, chunkMap });
+      } catch {
+        // Global index failed to load
+      }
+    }
+  }
+
+  return sources;
 }
 
 function formatResults(results: SearchResult[]) {

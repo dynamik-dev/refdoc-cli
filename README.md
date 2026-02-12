@@ -26,8 +26,6 @@ refdocs init
 # Add docs from anywhere
 refdocs add ./docs                                        # local directory
 refdocs add https://github.com/laravel/docs --branch 11.x # GitHub repo
-refdocs add https://docs.example.com/api/reference         # any web page
-refdocs add https://example.com/docs --crawl               # crawl a whole site
 
 # Search
 refdocs search "database connections"
@@ -64,10 +62,6 @@ refdocs init -g                           # create global config at ~/.refdocs/
 # Add sources
 refdocs add ./docs                        # local directory
 refdocs add https://github.com/org/repo   # GitHub repo (downloads markdown files)
-refdocs add https://example.com/page      # any URL (fetches + converts to markdown)
-refdocs add https://example.com/file.md   # direct .md or .txt file URL
-refdocs add https://example.com --crawl   # crawl a site (multiple pages)
-refdocs add https://example.com --crawl --max-pages 50 --depth 2
 refdocs add <source> -g                   # add to global ~/.refdocs/ store
 
 # Search
@@ -93,21 +87,16 @@ refdocs remove ref-docs/laravel           # remove a path from config
 
 3. **Output** — human-readable by default, `--json` for structured consumption, `--raw` for piping. Each result includes source file, line range, and heading trail.
 
-## Adding from the web
+## Adding sources
 
-`refdocs add` auto-detects the source type:
+`refdocs add` supports two source types:
 
 | Source | Behavior |
 |--------|----------|
 | Local path (`./docs`) | Adds directory to config |
 | GitHub URL | Downloads `.md` files from the repo tarball |
-| `.md` or `.txt` URL | Downloads the file directly |
-| Any other URL | Fetches the page and converts HTML to markdown |
-| Any URL + `--crawl` | Spiders the site, converting each page to markdown |
 
-Single-page URLs are fetched with [Readability](https://github.com/mozilla/readability) (content extraction) + [Turndown](https://github.com/mixmark-io/turndown) (HTML-to-markdown). With `--crawl`, links are followed within the same origin up to `--depth` levels (default: 3) and `--max-pages` (default: 200).
-
-All downloaded sources are tracked in `.refdocs.json` and can be re-pulled with `refdocs update`.
+GitHub sources are tracked in `.refdocs.json` and can be re-pulled with `refdocs update`.
 
 ## Global docs
 
@@ -153,8 +142,5 @@ All fields optional. See [Configuration](docs/configuration.md) for details.
 | [mdast-util-from-markdown](https://github.com/syntax-tree/mdast-util-from-markdown) | Markdown AST parsing |
 | [picomatch](https://github.com/micromatch/picomatch) | Glob pattern matching |
 | [tar-stream](https://github.com/mafintosh/tar-stream) | Tarball extraction for GitHub sources |
-| [@mozilla/readability](https://github.com/mozilla/readability) | Content extraction from web pages |
-| [Turndown](https://github.com/mixmark-io/turndown) | HTML-to-markdown conversion |
-| [cheerio](https://github.com/cheeriojs/cheerio) | Link discovery for crawling |
 
 Zero external services. Works offline, in containers, on planes.

@@ -22,6 +22,14 @@ export interface ConfigResult {
   configDir: string;
 }
 
+function mergeWithDefaults(raw: Record<string, unknown>): RefdocsConfig {
+  return {
+    ...DEFAULT_CONFIG,
+    ...raw,
+    boostFields: { ...DEFAULT_CONFIG.boostFields, ...(raw.boostFields as Partial<RefdocsConfig["boostFields"]>) },
+  } as RefdocsConfig;
+}
+
 export function loadConfig(cwd?: string): ConfigResult {
   const startDir = resolve(cwd ?? process.cwd());
   let dir = startDir;
@@ -37,7 +45,7 @@ export function loadConfig(cwd?: string): ConfigResult {
         );
       }
       return {
-        config: { ...DEFAULT_CONFIG, ...raw, boostFields: { ...DEFAULT_CONFIG.boostFields, ...raw.boostFields } },
+        config: mergeWithDefaults(raw),
         configDir: dir,
       };
     }
@@ -130,20 +138,14 @@ export function saveConfig(config: Partial<RefdocsConfig>, configDir: string): v
   writeFileSync(configPath, JSON.stringify(merged, null, 2) + "\n", "utf-8");
 }
 
-let globalDirOverride: string | null = null;
-
-export function setGlobalDirOverride(dir: string | null): void {
-  globalDirOverride = dir;
+export function getGlobalConfigDir(globalDir?: string): string {
+  return globalDir ?? join(homedir(), ".refdocs");
 }
 
-export function getGlobalConfigDir(): string {
-  return globalDirOverride ?? join(homedir(), ".refdocs");
-}
-
-export function initGlobalConfig(): void {
-  const globalDir = getGlobalConfigDir();
-  mkdirSync(globalDir, { recursive: true });
-  const configPath = join(globalDir, CONFIG_FILENAME);
+export function initGlobalConfig(globalDir?: string): void {
+  const dir = getGlobalConfigDir(globalDir);
+  mkdirSync(dir, { recursive: true });
+  const configPath = join(dir, CONFIG_FILENAME);
   if (existsSync(configPath)) return;
   const globalDefault: RefdocsConfig = {
     ...DEFAULT_CONFIG,
@@ -152,17 +154,17 @@ export function initGlobalConfig(): void {
   writeFileSync(configPath, JSON.stringify(globalDefault, null, 2) + "\n", "utf-8");
 }
 
-export function loadGlobalConfig(): ConfigResult | null {
-  const globalDir = getGlobalConfigDir();
-  const configPath = join(globalDir, CONFIG_FILENAME);
+export function loadGlobalConfig(globalDir?: string): ConfigResult | null {
+  const dir = getGlobalConfigDir(globalDir);
+  const configPath = join(dir, CONFIG_FILENAME);
   if (!existsSync(configPath)) return null;
   try {
     const raw = JSON.parse(readFileSync(configPath, "utf-8"));
     const errors = validateConfig(raw);
     if (errors.length > 0) return null;
     return {
-      config: { ...DEFAULT_CONFIG, ...raw, boostFields: { ...DEFAULT_CONFIG.boostFields, ...raw.boostFields } },
-      configDir: globalDir,
+      config: mergeWithDefaults(raw),
+      configDir: dir,
     };
   } catch {
     return null;

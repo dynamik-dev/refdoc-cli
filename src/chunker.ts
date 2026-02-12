@@ -17,8 +17,33 @@ interface RawSection {
 
 const FRONTMATTER_RE = /^---\r?\n[\s\S]*?\r?\n---\r?\n?/;
 
+const FENCED_CODE_RE = /```[\s\S]*?```/g;
+const INLINE_CODE_RE = /`[^`]+`/g;
+
 export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
+  if (!text) return 0;
+
+  // Extract fenced code blocks
+  let codeChars = 0;
+  const withoutFenced = text.replace(FENCED_CODE_RE, (match) => {
+    codeChars += match.length;
+    return "";
+  });
+
+  // Extract inline code from remaining text
+  const withoutCode = withoutFenced.replace(INLINE_CODE_RE, (match) => {
+    codeChars += match.length;
+    return "";
+  });
+
+  // Code tokens: ~2.5 chars per token (short tokens: brackets, operators, keywords)
+  const codeTokens = codeChars / 2.5;
+
+  // Prose tokens: ~1.3 tokens per word
+  const words = withoutCode.split(/\s+/).filter((w) => w.length > 0);
+  const proseTokens = words.length * 1.3;
+
+  return Math.ceil(codeTokens + proseTokens);
 }
 
 export function chunkMarkdown(
@@ -97,7 +122,7 @@ function extractSections(
 
   // Check if there's content before the first heading
   const firstHeading = children.find(
-    (n): n is Heading => n.type === "heading" && n.depth <= 3
+    (n): n is Heading => n.type === "heading" && n.depth <= 6
   );
 
   if (firstHeading && firstHeading.position) {
@@ -118,7 +143,7 @@ function extractSections(
   }
 
   for (const node of children) {
-    if (node.type === "heading" && node.depth <= 3 && node.position) {
+    if (node.type === "heading" && node.depth <= 6 && node.position) {
       const headingLine = node.position.start.line;
 
       // Flush previous section

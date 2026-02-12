@@ -4,30 +4,23 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   getGlobalConfigDir,
-  setGlobalDirOverride,
   initGlobalConfig,
   loadGlobalConfig,
   CONFIG_FILENAME,
 } from "../src/config.js";
 import { mergeSearchResults } from "../src/search.js";
-import { buildIndex, loadPersistedIndex } from "../src/indexer.js";
-import { search } from "../src/search.js";
+import { buildAndPersistIndex, loadPersistedIndex } from "../src/indexer.js";
+import { search, buildChunkMap } from "../src/search.js";
 import type { SearchResult, RefdocsConfig } from "../src/types.js";
 
 describe("getGlobalConfigDir", () => {
-  afterEach(() => {
-    setGlobalDirOverride(null);
-  });
-
   it("returns ~/.refdocs by default", () => {
-    setGlobalDirOverride(null);
     const dir = getGlobalConfigDir();
     expect(dir).toMatch(/\.refdocs$/);
   });
 
-  it("returns override when set", () => {
-    setGlobalDirOverride("/tmp/test-global-refdocs");
-    expect(getGlobalConfigDir()).toBe("/tmp/test-global-refdocs");
+  it("returns override when provided", () => {
+    expect(getGlobalConfigDir("/tmp/test-global-refdocs")).toBe("/tmp/test-global-refdocs");
   });
 });
 
@@ -36,19 +29,16 @@ describe("initGlobalConfig", () => {
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), "refdocs-global-init-"));
-    setGlobalDirOverride(tmpDir);
   });
 
   afterEach(() => {
-    setGlobalDirOverride(null);
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
   it("creates directory and config file", () => {
     // Use a subdirectory so mkdirSync recursive is actually tested
     const subDir = join(tmpDir, "nested");
-    setGlobalDirOverride(subDir);
-    initGlobalConfig();
+    initGlobalConfig(subDir);
     expect(existsSync(join(subDir, CONFIG_FILENAME))).toBe(true);
 
     const config = JSON.parse(readFileSync(join(subDir, CONFIG_FILENAME), "utf-8"));
@@ -59,7 +49,7 @@ describe("initGlobalConfig", () => {
   it("does not overwrite existing config", () => {
     const configPath = join(tmpDir, CONFIG_FILENAME);
     writeFileSync(configPath, JSON.stringify({ paths: ["custom"] }, null, 2) + "\n");
-    initGlobalConfig();
+    initGlobalConfig(tmpDir);
 
     const config = JSON.parse(readFileSync(configPath, "utf-8"));
     expect(config.paths).toEqual(["custom"]);
@@ -71,16 +61,14 @@ describe("loadGlobalConfig", () => {
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), "refdocs-global-load-"));
-    setGlobalDirOverride(tmpDir);
   });
 
   afterEach(() => {
-    setGlobalDirOverride(null);
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
   it("returns null when no config exists", () => {
-    expect(loadGlobalConfig()).toBeNull();
+    expect(loadGlobalConfig(tmpDir)).toBeNull();
   });
 
   it("loads valid config", () => {
@@ -88,7 +76,7 @@ describe("loadGlobalConfig", () => {
       join(tmpDir, CONFIG_FILENAME),
       JSON.stringify({ paths: ["my-docs"], chunkMaxTokens: 600 }),
     );
-    const result = loadGlobalConfig();
+    const result = loadGlobalConfig(tmpDir);
     expect(result).not.toBeNull();
     expect(result!.config.paths).toEqual(["my-docs"]);
     expect(result!.config.chunkMaxTokens).toBe(600);
@@ -97,12 +85,12 @@ describe("loadGlobalConfig", () => {
 
   it("returns null for invalid config", () => {
     writeFileSync(join(tmpDir, CONFIG_FILENAME), JSON.stringify({ paths: 123 }));
-    expect(loadGlobalConfig()).toBeNull();
+    expect(loadGlobalConfig(tmpDir)).toBeNull();
   });
 
   it("returns null for malformed JSON", () => {
     writeFileSync(join(tmpDir, CONFIG_FILENAME), "not json at all{{{");
-    expect(loadGlobalConfig()).toBeNull();
+    expect(loadGlobalConfig(tmpDir)).toBeNull();
   });
 });
 
@@ -187,20 +175,20 @@ describe("local + global search integration", () => {
   });
 
   it("merges results from local and global indexes", () => {
-    buildIndex(baseConfig, localDir);
-    buildIndex(baseConfig, globalDir);
+    buildAndPersistIndex(baseConfig, localDir);
+    buildAndPersistIndex(baseConfig, globalDir);
 
-    const { index: localIndex } = loadPersistedIndex(
+    const { index: localIndex, chunkMap: localChunkMap } = loadPersistedIndex(
       join(localDir, baseConfig.index),
       baseConfig,
     );
-    const { index: globalIndex } = loadPersistedIndex(
+    const { index: globalIndex, chunkMap: globalChunkMap } = loadPersistedIndex(
       join(globalDir, baseConfig.index),
       baseConfig,
     );
 
-    const localResults = search(localIndex, "authentication", { maxResults: 5 });
-    const globalResults = search(globalIndex, "authentication", { maxResults: 5 }).map((r) => ({
+    const localResults = search(localIndex, localChunkMap, "authentication", { maxResults: 5 });
+    const globalResults = search(globalIndex, globalChunkMap, "authentication", { maxResults: 5 }).map((r) => ({
       ...r,
       file: `[global] ${r.file}`,
     }));

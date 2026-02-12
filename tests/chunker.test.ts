@@ -12,12 +12,39 @@ function readFixture(name: string): string {
 const defaultOpts = { maxTokens: 800, minTokens: 100 };
 
 describe("estimateTokens", () => {
-  it("estimates tokens as chars / 4 rounded up", () => {
+  it("returns 0 for empty string", () => {
     expect(estimateTokens("")).toBe(0);
-    expect(estimateTokens("a")).toBe(1);
-    expect(estimateTokens("abcd")).toBe(1);
-    expect(estimateTokens("abcde")).toBe(2);
-    expect(estimateTokens("a".repeat(100))).toBe(25);
+  });
+
+  it("estimates prose at ~1.3 tokens per word", () => {
+    const prose = "The quick brown fox jumps over the lazy dog";
+    const tokens = estimateTokens(prose);
+    // 9 words * 1.3 = 11.7 → 12
+    expect(tokens).toBe(12);
+  });
+
+  it("estimates code blocks at ~2.5 chars per token", () => {
+    const code = "```\nconst x = foo();\n```";
+    const tokens = estimateTokens(code);
+    // All chars are code: 23 chars / 2.5 = 9.2 → 10
+    expect(tokens).toBe(10);
+  });
+
+  it("estimates inline code separately from prose", () => {
+    const mixed = "Use `npm install` to install";
+    const tokens = estimateTokens(mixed);
+    // inline code: `npm install` = 13 chars → 13/2.5 = 5.2
+    // prose: "Use  to install" → 3 words * 1.3 = 3.9
+    // total: 9.1 → 10
+    expect(tokens).toBe(10);
+  });
+
+  it("handles code-heavy content with higher estimates than chars/4", () => {
+    const codeHeavy = "```js\nif (x) { return y; }\n```";
+    const charsOver4 = Math.ceil(codeHeavy.length / 4);
+    const tokens = estimateTokens(codeHeavy);
+    // Code-heavy content should estimate higher than naive chars/4
+    expect(tokens).toBeGreaterThanOrEqual(charsOver4);
   });
 });
 
@@ -213,15 +240,13 @@ describe("chunkMarkdown", () => {
       expect(jumpedChunk).toBeDefined();
     });
 
-    it("handles h4+ as body content, not split points", () => {
+    it("handles h4+ as chunk boundaries", () => {
       const content = readFixture("heading-jumps.md");
       const chunks = chunkMarkdown(content, "heading-jumps.md", defaultOpts);
-      // h4 "Deep Jump to H4" should appear in body, not as a separate chunk title
-      const h4Chunk = chunks.find((c) => c.title === "Deep Jump to H4");
-      expect(h4Chunk).toBeUndefined();
-      // But the text should be in some chunk's body
-      const allBodies = chunks.map((c) => c.body).join("\n");
-      expect(allBodies).toContain("Deep Jump to H4");
+      // h4 "Deep Jump to H4" should be a chunk boundary with its own heading
+      const h4Chunk = chunks.find((c) => c.headings.includes("Deep Jump to H4"));
+      expect(h4Chunk).toBeDefined();
+      expect(h4Chunk!.body).toContain("jumps from h1 to h4");
     });
 
     it("builds correct breadcrumbs after depth jump", () => {

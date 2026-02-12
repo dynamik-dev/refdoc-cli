@@ -6,15 +6,7 @@ import { createGunzip } from "node:zlib";
 import tar from "tar-stream";
 import { parseGitHubUrl, downloadTarball } from "./github.js";
 import { saveConfig } from "./config.js";
-import {
-  isGitHubUrl,
-  isTextFileUrl,
-  deriveLocalPath,
-  deriveCrawlDir,
-  fetchSingleFile,
-  crawlSite,
-} from "./crawl.js";
-import type { RefdocsConfig, Source, GitHubSource, FileSource, CrawlSource } from "./types.js";
+import type { RefdocsConfig, Source, GitHubSource, FileSource } from "./types.js";
 
 export interface AddOptions {
   path?: string;
@@ -31,12 +23,6 @@ export interface AddResult {
 export interface UpdateResult {
   source: Source;
   filesWritten: number;
-}
-
-export interface CrawlAddOptions {
-  path?: string;
-  maxPages?: number;
-  depth?: number;
 }
 
 export async function addFromGitHub(
@@ -83,74 +69,6 @@ export async function addFromGitHub(
   return { filesWritten, localPath, source };
 }
 
-export async function addFromFileUrl(
-  url: string,
-  options: { path?: string },
-  configDir: string,
-  config: RefdocsConfig,
-): Promise<AddResult> {
-  const localPath = options.path ?? deriveLocalPath(url);
-  const fullPath = join(configDir, localPath);
-
-  const { content } = await fetchSingleFile(url);
-
-  mkdirSync(dirname(fullPath), { recursive: true });
-  writeFileSync(fullPath, content, "utf-8");
-
-  const source: FileSource = {
-    type: "file",
-    url,
-    localPath,
-    addedAt: new Date().toISOString(),
-  };
-
-  // Add the parent directory to paths (not the file itself)
-  const pathDir = dirname(localPath);
-  const paths = isPathCovered(config.paths, pathDir)
-    ? config.paths
-    : [...config.paths, pathDir];
-
-  const sources = upsertSource(config.sources ?? [], source);
-
-  saveConfig({ paths, sources }, configDir);
-
-  return { filesWritten: 1, localPath, source };
-}
-
-export async function addFromCrawl(
-  url: string,
-  options: CrawlAddOptions,
-  configDir: string,
-  config: RefdocsConfig,
-): Promise<AddResult> {
-  const localPath = options.path ?? deriveCrawlDir(url);
-  const outputDir = join(configDir, localPath);
-
-  const result = await crawlSite(url, outputDir, {
-    maxPages: options.maxPages,
-    depth: options.depth,
-  });
-
-  const source: CrawlSource = {
-    type: "crawl",
-    url,
-    scope: url,
-    localPath,
-    pagesCrawled: result.filesWritten,
-    addedAt: new Date().toISOString(),
-  };
-
-  const paths = isPathCovered(config.paths, localPath)
-    ? config.paths
-    : [...config.paths, localPath];
-
-  const sources = upsertSource(config.sources ?? [], source);
-
-  saveConfig({ paths, sources }, configDir);
-
-  return { filesWritten: result.filesWritten, localPath, source };
-}
-
 export async function updateSources(
   config: RefdocsConfig,
   configDir: string,
@@ -176,17 +94,15 @@ export async function updateSources(
         break;
       }
       case "file": {
-        const { content } = await fetchSingleFile(source.url);
+        const response = await fetch(source.url, { redirect: "follow" });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status} fetching ${source.url}`);
+        }
+        const content = await response.text();
         const fullPath = join(configDir, source.localPath);
         mkdirSync(dirname(fullPath), { recursive: true });
         writeFileSync(fullPath, content, "utf-8");
         results.push({ source, filesWritten: 1 });
-        break;
-      }
-      case "crawl": {
-        const outputDir = join(configDir, source.localPath);
-        const crawlResult = await crawlSite(source.url, outputDir);
-        results.push({ source, filesWritten: crawlResult.filesWritten });
         break;
       }
       default: {
@@ -326,8 +242,10 @@ export async function extractMarkdownFiles(
 
   const gunzip = createGunzip();
   const source = Readable.from(tarballBuffer);
-  pipeline(source, gunzip, extract).catch(() => {});
-  await processEntry;
+  await Promise.all([
+    pipeline(source, gunzip, extract),
+    processEntry,
+  ]);
 
   return filesWritten;
 }
@@ -355,7 +273,5 @@ function sourceKey(source: Source): string {
       return `github:${source.owner}/${source.repo}/${source.subpath}`;
     case "file":
       return `file:${source.url}`;
-    case "crawl":
-      return `crawl:${source.url}`;
   }
 }
