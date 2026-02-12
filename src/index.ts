@@ -299,8 +299,8 @@ program
         if (opts.index && result.filesWritten > 0) {
           reindex(opts.global, label);
         }
-      } else if (isUrl) {
-        // Single file URL mode
+      } else if (isUrl && isTextFileUrl(source)) {
+        // Single file URL mode (.md or .txt)
         const result = await addFromFileUrl(
           source,
           { path: opts.path },
@@ -309,6 +309,21 @@ program
         );
 
         console.log(`${label}Downloaded 1 file → ${result.localPath}`);
+
+        if (opts.index && result.filesWritten > 0) {
+          reindex(opts.global, label);
+        }
+      } else if (isUrl) {
+        // Single page crawl: fetch HTML and convert to markdown
+        console.log(`Crawling ${source}...`);
+        const result = await addFromCrawl(
+          source,
+          { path: opts.path, maxPages: 1, depth: 0 },
+          configDir,
+          config,
+        );
+
+        console.log(`${label}Converted ${result.filesWritten} page → ${result.localPath}/`);
 
         if (opts.index && result.filesWritten > 0) {
           reindex(opts.global, label);
