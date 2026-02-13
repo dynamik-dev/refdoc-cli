@@ -22,7 +22,7 @@ jobs:
 
       - run: npm ci
       - run: npm test
-      - run: npx tsc
+      - run: npm run build:npm
 
       - run: npm publish --access public --provenance
         env:

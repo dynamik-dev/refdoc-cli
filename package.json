@@ -1,6 +1,6 @@
 {
   "name": "@dynamik-dev/refdocs",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "type": "module",
   "description": "Local CLI tool that indexes markdown documentation and exposes fast fuzzy search with intelligent chunking",
   "main": "dist/index.js",
@@ -13,7 +13,9 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "build": "bun build --compile src/index.ts --outfile refdocs"
+    "build": "bun build --compile src/index.ts --outfile refdocs",
+    "build:npm": "rm -rf dist && tsc -p tsconfig.build.json",
+    "prepack": "npm run build:npm"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
