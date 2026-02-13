@@ -6,6 +6,7 @@ import { extractMarkdownFiles, updateSources, addLocalPath, removePath, isPathCo
 import type { RefdocsConfig } from "../src/types.js";
 
 const FIXTURE_PATH = join(import.meta.dirname, "fixtures", "test-repo.tar.gz");
+const MDX_FIXTURE_PATH = join(import.meta.dirname, "fixtures", "test-repo-mdx.tar.gz");
 
 describe("extractMarkdownFiles", () => {
   let tmpDir: string;
@@ -69,6 +70,27 @@ describe("extractMarkdownFiles", () => {
   it("returns 0 for nonexistent subpath", async () => {
     const count = await extractMarkdownFiles(tarball, "nonexistent", join(tmpDir, "out"));
     expect(count).toBe(0);
+  });
+
+  it("extracts .mdx files alongside .md files", async () => {
+    const mdxTarball = readFileSync(MDX_FIXTURE_PATH);
+    const count = await extractMarkdownFiles(mdxTarball, "", join(tmpDir, "out"));
+    expect(count).toBe(3);
+
+    expect(existsSync(join(tmpDir, "out", "docs", "guide.md"))).toBe(true);
+    expect(existsSync(join(tmpDir, "out", "docs", "component.mdx"))).toBe(true);
+    expect(existsSync(join(tmpDir, "out", "docs", "page.mdx"))).toBe(true);
+    expect(existsSync(join(tmpDir, "out", "package.json"))).toBe(false);
+  });
+
+  it("filters .mdx files by subpath", async () => {
+    const mdxTarball = readFileSync(MDX_FIXTURE_PATH);
+    const count = await extractMarkdownFiles(mdxTarball, "docs", join(tmpDir, "out"));
+    expect(count).toBe(3);
+
+    expect(existsSync(join(tmpDir, "out", "guide.md"))).toBe(true);
+    expect(existsSync(join(tmpDir, "out", "component.mdx"))).toBe(true);
+    expect(existsSync(join(tmpDir, "out", "page.mdx"))).toBe(true);
   });
 });
 
@@ -261,12 +283,21 @@ describe("addLocalPath", () => {
     expect(() => addLocalPath("nope", tmpDir, baseConfig)).toThrow("Directory not found: nope");
   });
 
-  it("throws if directory has no .md files", () => {
+  it("throws if directory has no .md/.mdx files", () => {
     const emptyDir = join(tmpDir, "empty");
     mkdirSync(emptyDir, { recursive: true });
     writeFileSync(join(emptyDir, "data.json"), "{}");
 
-    expect(() => addLocalPath("empty", tmpDir, baseConfig)).toThrow("No .md files found");
+    expect(() => addLocalPath("empty", tmpDir, baseConfig)).toThrow("No .md/.mdx files found");
+  });
+
+  it("accepts a directory with only .mdx files", () => {
+    const mdxDir = join(tmpDir, "mdx-docs");
+    mkdirSync(mdxDir, { recursive: true });
+    writeFileSync(join(mdxDir, "page.mdx"), "# MDX Page");
+
+    const result = addLocalPath("mdx-docs", tmpDir, baseConfig);
+    expect(result.localPath).toBe("mdx-docs");
   });
 
   it("finds .md files in subdirectories", () => {

@@ -142,7 +142,7 @@ export function addLocalPath(
   }
 
   if (!hasMarkdownFiles(absolutePath)) {
-    throw new Error(`No .md files found in ${inputPath}`);
+    throw new Error(`No .md/.mdx files found in ${inputPath}`);
   }
 
   const localPath = relative(configDir, absolutePath);
@@ -189,7 +189,7 @@ export function removePath(
 function hasMarkdownFiles(dir: string): boolean {
   const entries = readdirSync(dir, { withFileTypes: true });
   for (const entry of entries) {
-    if (entry.isFile() && entry.name.endsWith(".md")) return true;
+    if (entry.isFile() && (entry.name.endsWith(".md") || entry.name.endsWith(".mdx"))) return true;
     if (entry.isDirectory()) {
       if (hasMarkdownFiles(join(dir, entry.name))) return true;
     }
@@ -210,7 +210,7 @@ export async function extractMarkdownFiles(
       const chunks: Buffer[] = [];
       stream.on("data", (chunk: Buffer) => chunks.push(chunk));
       stream.on("end", () => {
-        if (header.type === "file" && header.name.endsWith(".md")) {
+        if (header.type === "file" && (header.name.endsWith(".md") || header.name.endsWith(".mdx"))) {
           const relativePath = stripTarPrefix(header.name);
 
           if (subpath && !relativePath.startsWith(subpath + "/") && relativePath !== subpath) {
