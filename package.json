@@ -1,6 +1,6 @@
 {
   "name": "@dynamik-dev/refdocs",
-  "version": "0.6.4",
+  "version": "0.7.0",
   "type": "module",
   "description": "Local CLI tool that indexes markdown documentation and exposes fast fuzzy search with intelligent chunking",
   "main": "dist/index.js",
@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "build": "bun build --compile src/index.ts --outfile refdocs",
     "build:npm": "rm -rf dist && tsc -p tsconfig.build.json",
+    "eval:run": "./scripts/run-eval.sh",
     "prepack": "npm run build:npm"
   },
   "publishConfig": {

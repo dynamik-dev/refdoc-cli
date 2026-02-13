@@ -5,10 +5,11 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 const CLI = join(import.meta.dirname, "..", "src", "index.ts");
+const TSX_IMPORT = join(import.meta.dirname, "..", "node_modules", "tsx", "dist", "loader.mjs");
 
 function run(args: string, cwd: string): { stdout: string; stderr: string; exitCode: number } {
   try {
-    const stdout = execSync(`npx tsx ${CLI} ${args}`, {
+    const stdout = execSync(`node --import "${TSX_IMPORT}" ${CLI} ${args}`, {
       cwd,
       encoding: "utf-8",
       timeout: 15000,
@@ -148,6 +149,34 @@ describe("CLI", () => {
     it("shows message when no results found", () => {
       const { stdout } = run('search "xyznonexistent"', tmpDir);
       expect(stdout).toContain("No results found");
+    });
+  });
+
+  describe("refdocs eval", () => {
+    it("supports eval suite output as JSON", () => {
+      run("index", tmpDir);
+      writeFileSync(
+        join(tmpDir, "eval-suite.json"),
+        JSON.stringify({
+          name: "cli-eval",
+          maxResults: 4,
+          cases: [
+            {
+              id: "auth-query",
+              query: "authentication bearer token",
+              facets: ["authentication", "token", "authorization header"],
+            },
+          ],
+        }, null, 2)
+      );
+
+      const { stdout, exitCode } = run("eval eval-suite.json --json", tmpDir);
+      expect(exitCode).toBe(0);
+      const report = JSON.parse(stdout);
+      expect(report).toHaveProperty("summary");
+      expect(report.summary).toHaveProperty("totalCases");
+      expect(report.summary.totalCases).toBe(1);
+      expect(report).toHaveProperty("cases");
     });
   });
 

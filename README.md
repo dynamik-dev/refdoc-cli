@@ -70,6 +70,8 @@ refdocs search "config" -n 5              # top 5 results
 refdocs search "api" -f "api/**/*.md"     # filter by file glob
 refdocs search "hooks" --json             # structured output
 refdocs search "auth" --raw               # body only, for piping
+refdocs eval docs/eval-suite.example.json # baseline vs reranked token-efficiency report
+npm run eval:run                          # index + eval JSON report to eval-reports/
 
 # Manage
 refdocs index                             # rebuild the search index
@@ -83,9 +85,30 @@ refdocs remove ref-docs/laravel           # remove a path from config
 
 1. **Index** — parses each `.md` file into an AST, splits at h1/h2/h3 boundaries, merges small sections, splits large ones at paragraph breaks. Each chunk keeps its full heading breadcrumb (`Config > Database > Connections`).
 
-2. **Search** — fuzzy matching (20% edit tolerance) with prefix search and field boosting. Titles weighted 2x, headings 1.5x, body 1x. Results ranked by TF-IDF. File-level glob filtering via `-f`.
+2. **Search** — fuzzy matching (20% edit tolerance) with prefix search and field boosting. Titles weighted 2x, headings 1.5x, body 1x. A lightweight reranker then improves multi-intent coverage using exact symbol boosts, diversity penalties, and token-efficiency weighting.
 
 3. **Output** — human-readable by default, `--json` for structured consumption, `--raw` for piping. Each result includes source file, line range, and heading trail.
+
+## Evaluation harness
+
+Use `refdocs eval <suite.json>` to compare baseline TF-IDF ranking against reranked retrieval quality.
+
+- Tracks full-facet coverage rate
+- Tracks tokens to first useful hit
+- Tracks tokens to full query coverage
+- Emits win/tie/loss by query so ranking changes are measurable
+
+Example suite template: `docs/eval-suite.example.json`
+
+For repeatable runs with timestamped outputs:
+
+```bash
+npm run eval:run
+npm run eval:run -- --suite docs/eval-suite.example.json --results 8
+```
+
+This writes reports to `eval-reports/<suite>-<UTC timestamp>.json` and updates a stable symlink:
+`eval-reports/<suite>-latest.json`.
 
 ## Adding sources
 

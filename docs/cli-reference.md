@@ -76,6 +76,7 @@ refdocs search "auth" -n 5
 refdocs search "config" -f "api/**/*.md"
 refdocs search "middleware" --json
 refdocs search "hooks" --raw
+refdocs eval docs/eval-suite.example.json
 ```
 
 **Arguments:**
@@ -123,7 +124,8 @@ Each result shows:
     "file": "spatie-laravel-data/transformers.md",
     "lines": [15, 48],
     "headings": ["Transformers", "Built-in Transformers"],
-    "body": "Transformers are used to convert data properties when..."
+    "body": "Transformers are used to convert data properties when...",
+    "tokenEstimate": 102
   }
 ]
 ```
@@ -136,6 +138,55 @@ Prints only the chunk body text, one per result, separated by blank lines. Usefu
 
 - If the index doesn't exist: `Index not found. Run 'refdocs index' first.`
 - If no results match: `No results found.`
+
+---
+
+## `refdocs eval <suite>`
+
+Run a retrieval evaluation suite and compare baseline ranking vs reranked output.
+
+```bash
+refdocs eval docs/eval-suite.example.json
+refdocs eval my-suite.json -n 8
+refdocs eval my-suite.json --json
+```
+
+**Arguments:**
+
+| Argument | Description |
+|----------|-------------|
+| `suite` | Path to eval suite JSON file |
+
+**Options:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-n, --results <count>` | suite default | Default results per query (1-20) |
+| `--json` | `false` | Emit full eval report as JSON |
+
+**Suite format:**
+
+```json
+{
+  "name": "Astro Tags Retrieval",
+  "maxResults": 5,
+  "cases": [
+    {
+      "id": "astro-tags",
+      "query": "How to define tags in src/content.config.ts...",
+      "facets": ["src/content.config.ts", "z.array(z.string())", "getCollection", "tags.includes"]
+    }
+  ]
+}
+```
+
+**Output highlights:**
+
+- Full coverage rate
+- Average coverage ratio
+- Tokens to first facet hit
+- Tokens to full coverage
+- Query-level win/tie/loss verdict
 
 ---
 

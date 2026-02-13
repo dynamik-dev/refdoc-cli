@@ -9,6 +9,7 @@ import { buildAndPersistIndex, loadPersistedIndex } from "./indexer.js";
 import { searchAllIndexes } from "./search.js";
 import type { IndexSource } from "./search.js";
 import { addFromGitHub, addLocalPath, removePath, updateSources } from "./add.js";
+import { loadEvalSuite, runEvalSuite } from "./eval.js";
 import type { SearchResult } from "./types.js";
 
 const require = createRequire(import.meta.url);
@@ -101,6 +102,36 @@ program
         }
       } else {
         formatResults(results);
+      }
+    } catch (err) {
+      console.error((err as Error).message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("eval <suite>")
+  .description("Evaluate search relevance/token efficiency against an eval suite JSON file")
+  .option("-n, --results <count>", "default results per query (1-20)", (value: string) => {
+    const n = parseInt(value, 10);
+    if (isNaN(n) || n < 1 || n > 20) {
+      throw new InvalidArgumentError(`Invalid value "${value}". Must be a number between 1 and 20.`);
+    }
+    return n;
+  })
+  .option("--json", "output eval report as JSON")
+  .action((suitePath: string, opts: { results?: number; json?: boolean }) => {
+    try {
+      const suite = loadEvalSuite(suitePath);
+      const sources = resolveIndexSources();
+      const report = runEvalSuite(sources, suite, {
+        maxResults: opts.results,
+      });
+
+      if (opts.json) {
+        console.log(JSON.stringify(report, null, 2));
+      } else {
+        formatEvalReport(report);
       }
     } catch (err) {
       console.error((err as Error).message);
@@ -417,6 +448,46 @@ function formatResults(results: SearchResult[]) {
       console.log("\n---\n");
     }
   });
+}
+
+function formatEvalReport(report: ReturnType<typeof runEvalSuite>) {
+  console.log(`Eval suite: ${report.suite.name ?? "unnamed"} (${report.summary.totalCases} case${report.summary.totalCases !== 1 ? "s" : ""})`);
+  if (report.suite.description) {
+    console.log(report.suite.description);
+  }
+  console.log(`Results/query: ${report.maxResults}`);
+  console.log("");
+  console.log("Summary");
+  console.log("Metric                          Baseline     Reranked");
+  console.log(`Full coverage rate             ${formatPercent(report.summary.baseline.fullCoverageRate).padEnd(12)} ${formatPercent(report.summary.reranked.fullCoverageRate)}`);
+  console.log(`Average coverage ratio         ${formatPercent(report.summary.baseline.averageCoverageRatio).padEnd(12)} ${formatPercent(report.summary.reranked.averageCoverageRatio)}`);
+  console.log(`Avg tokens to first facet      ${formatNumber(report.summary.baseline.averageTokensToFirstFacet).padEnd(12)} ${formatNumber(report.summary.reranked.averageTokensToFirstFacet)}`);
+  console.log(`Avg tokens to full coverage    ${formatNumber(report.summary.baseline.averageTokensToFullCoverage).padEnd(12)} ${formatNumber(report.summary.reranked.averageTokensToFullCoverage)}`);
+  console.log(`Median tokens to full coverage ${formatNumber(report.summary.baseline.medianTokensToFullCoverage).padEnd(12)} ${formatNumber(report.summary.reranked.medianTokensToFullCoverage)}`);
+  console.log("");
+  console.log(`Verdict (reranked vs baseline): ${report.summary.wins} win / ${report.summary.ties} tie / ${report.summary.losses} loss`);
+  console.log("");
+  console.log("Per-case");
+  for (const caseResult of report.cases) {
+    const bCoverage = `${Math.round(caseResult.baseline.coverageRatio * 100)}%`;
+    const rCoverage = `${Math.round(caseResult.reranked.coverageRatio * 100)}%`;
+    const bTokens = formatNumber(caseResult.baseline.tokensToFullCoverage);
+    const rTokens = formatNumber(caseResult.reranked.tokensToFullCoverage);
+    console.log(
+      `- ${caseResult.id}: ${caseResult.verdict} | coverage ${bCoverage} -> ${rCoverage} | tokens_to_full ${bTokens} -> ${rTokens}`
+    );
+  }
+}
+
+function formatPercent(value: number): string {
+  return `${(value * 100).toFixed(1)}%`;
+}
+
+function formatNumber(value: number | null): string {
+  if (value === null || Number.isNaN(value)) {
+    return "n/a";
+  }
+  return Math.round(value).toString();
 }
 
 program.parse();

@@ -9,8 +9,13 @@ When you run `refdocs search "query"`:
 1. The persisted index is loaded from disk (`.refdocs-index.json`)
 2. MiniSearch runs the query with fuzzy matching and prefix search
 3. Results are scored by relevance with field-level boosting
-4. If a file filter is specified, non-matching results are removed
-5. The top N results are returned
+4. A lightweight reranker re-orders the top candidate pool to improve:
+   - multi-facet query coverage
+   - exact symbol/API matches
+   - diversity (avoid near-duplicate chunks)
+   - token efficiency
+5. If a file filter is specified, non-matching results are removed
+6. The top N results are returned
 
 ## Fuzzy matching
 
@@ -53,7 +58,7 @@ Glob matching is powered by [picomatch](https://github.com/micromatch/picomatch)
 
 ## Scoring
 
-Results are ranked by MiniSearch's TF-IDF scoring algorithm, adjusted by field boost weights. The `score` field in JSON output reflects this combined relevance score.
+Initial ranking is MiniSearch TF-IDF (with field boosts). A second pass reranker adjusts order using query coverage, symbol matches, and diversity/token-efficiency features. The `score` field in JSON output reflects the final ranking score.
 
 Higher scores mean stronger matches. Scores are not normalized to a fixed range — they depend on the index size and term frequency distribution.
 
@@ -68,6 +73,21 @@ The `-n` flag controls how many results are returned:
 ```bash
 refdocs search "config" -n 5
 ```
+
+## Evaluation mode
+
+You can benchmark retrieval quality and token efficiency with:
+
+```bash
+refdocs eval docs/eval-suite.example.json
+```
+
+The eval command compares baseline TF-IDF ranking against reranked output and reports:
+
+- full coverage rate
+- average coverage ratio
+- average/median tokens to full coverage
+- win/tie/loss counts per query
 
 ## Output formats
 
@@ -96,7 +116,8 @@ Before running the app, configure your database...
     "file": "config/database.md",
     "lines": [12, 34],
     "headings": ["Configuration", "Database", "Connections"],
-    "body": "Connection pooling is configured via the `connections` key..."
+    "body": "Connection pooling is configured via the `connections` key...",
+    "tokenEstimate": 78
   }
 ]
 ```

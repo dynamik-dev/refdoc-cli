@@ -48,6 +48,7 @@ export interface SearchResult {
   lines: [number, number];
   headings: string[];
   body: string;
+  tokenEstimate?: number;
 }
 
 export interface SearchOptions {

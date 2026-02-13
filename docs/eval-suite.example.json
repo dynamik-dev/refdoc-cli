@@ -1,0 +1,26 @@
+{
+  "name": "Astro Tags Retrieval",
+  "description": "Checks multi-facet retrieval for schema + filtering + implementation snippets.",
+  "maxResults": 5,
+  "cases": [
+    {
+      "id": "astro-tags",
+      "query": "How to define tags in src/content.config.ts schema, query/filter by tags with getCollection(), and return a minimal implementation snippet",
+      "facets": [
+        "src/content.config.ts",
+        "z.array(z.string())",
+        "getCollection",
+        "tags.includes"
+      ]
+    },
+    {
+      "id": "schema-only",
+      "query": "Astro content collection schema for tags",
+      "facets": [
+        "schema",
+        "tags",
+        "z.array(z.string())"
+      ]
+    }
+  ]
+}
