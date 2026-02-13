@@ -17,7 +17,7 @@ export function findMarkdownFiles(dirs: string[], baseDir: string): string[] {
       const stat = statSync(fullPath);
       if (stat.isDirectory()) {
         walk(fullPath);
-      } else if (entry.endsWith(".md") || entry.endsWith(".txt")) {
+      } else if (entry.endsWith(".md") || entry.endsWith(".mdx") || entry.endsWith(".txt")) {
         files.push(relative(baseDir, fullPath));
       }
     }
