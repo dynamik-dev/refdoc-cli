@@ -3,17 +3,14 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { readFileSync, existsSync } from "node:fs";
-import { loadConfig, validateConfig, configExists, initConfig, CONFIG_FILENAME } from "../src/config.js";
+import { loadConfig, validateConfig, configExists, initConfig, CONFIG_FILENAME, CONFIG_DIR_NAME } from "../src/config.js";
 
 describe("validateConfig", () => {
   it("returns no errors for valid config", () => {
     expect(
       validateConfig({
         paths: ["docs"],
-        index: ".index.json",
-        chunkMaxTokens: 800,
-        chunkMinTokens: 100,
-        boostFields: { title: 2, headings: 1.5, body: 1 },
+        manifest: "manifest.json",
       })
     ).toEqual([]);
   });
@@ -38,35 +35,9 @@ describe("validateConfig", () => {
     expect(errors).toContain('"paths" must be an array of strings');
   });
 
-  it("rejects non-string index", () => {
-    const errors = validateConfig({ index: 123 });
-    expect(errors).toContain('"index" must be a string');
-  });
-
-  it("rejects non-positive chunkMaxTokens", () => {
-    expect(validateConfig({ chunkMaxTokens: -1 })).toContain(
-      '"chunkMaxTokens" must be a positive number'
-    );
-    expect(validateConfig({ chunkMaxTokens: "abc" })).toContain(
-      '"chunkMaxTokens" must be a positive number'
-    );
-  });
-
-  it("rejects non-positive chunkMinTokens", () => {
-    expect(validateConfig({ chunkMinTokens: 0 })).toContain(
-      '"chunkMinTokens" must be a positive number'
-    );
-  });
-
-  it("rejects invalid boostFields", () => {
-    expect(validateConfig({ boostFields: "not-object" })).toContain(
-      '"boostFields" must be an object'
-    );
-  });
-
-  it("rejects non-number boost field values", () => {
-    const errors = validateConfig({ boostFields: { title: "high" } });
-    expect(errors).toContain('"boostFields.title" must be a number');
+  it("rejects non-string manifest", () => {
+    const errors = validateConfig({ manifest: 123 });
+    expect(errors).toContain('"manifest" must be a string');
   });
 });
 
@@ -83,53 +54,43 @@ describe("loadConfig", () => {
 
   it("returns defaults when no config file exists", () => {
     const { config, configDir } = loadConfig(tmpDir);
-    expect(config.paths).toEqual(["ref-docs"]);
-    expect(config.index).toBe(".refdocs-index.json");
-    expect(config.chunkMaxTokens).toBe(800);
-    expect(config.chunkMinTokens).toBe(100);
-    expect(configDir).toBe(tmpDir);
+    expect(config.paths).toEqual(["docs"]);
+    expect(config.manifest).toBe("manifest.json");
+    expect(configDir).toBe(join(tmpDir, CONFIG_DIR_NAME));
   });
 
   it("loads config from given directory", () => {
+    mkdirSync(join(tmpDir, CONFIG_DIR_NAME), { recursive: true });
     writeFileSync(
-      join(tmpDir, ".refdocs.json"),
-      JSON.stringify({ paths: ["docs"], chunkMaxTokens: 500 })
+      join(tmpDir, CONFIG_DIR_NAME, CONFIG_FILENAME),
+      JSON.stringify({ paths: ["my-docs"] })
     );
-    const { config } = loadConfig(tmpDir);
-    expect(config.paths).toEqual(["docs"]);
-    expect(config.chunkMaxTokens).toBe(500);
-    expect(config.chunkMinTokens).toBe(100); // default preserved
+    const { config, configDir } = loadConfig(tmpDir);
+    expect(config.paths).toEqual(["my-docs"]);
+    expect(config.manifest).toBe("manifest.json"); // default preserved
+    expect(configDir).toBe(join(tmpDir, CONFIG_DIR_NAME));
   });
 
   it("walks up directories to find config", () => {
+    mkdirSync(join(tmpDir, CONFIG_DIR_NAME), { recursive: true });
     writeFileSync(
-      join(tmpDir, ".refdocs.json"),
+      join(tmpDir, CONFIG_DIR_NAME, CONFIG_FILENAME),
       JSON.stringify({ paths: ["custom-docs"] })
     );
     const subDir = join(tmpDir, "sub", "deep");
     mkdirSync(subDir, { recursive: true });
     const { config, configDir } = loadConfig(subDir);
     expect(config.paths).toEqual(["custom-docs"]);
-    expect(configDir).toBe(tmpDir);
-  });
-
-  it("merges boostFields with defaults", () => {
-    writeFileSync(
-      join(tmpDir, ".refdocs.json"),
-      JSON.stringify({ boostFields: { title: 5 } })
-    );
-    const { config } = loadConfig(tmpDir);
-    expect(config.boostFields.title).toBe(5);
-    expect(config.boostFields.headings).toBe(1.5);
-    expect(config.boostFields.body).toBe(1);
+    expect(configDir).toBe(join(tmpDir, CONFIG_DIR_NAME));
   });
 
   it("throws on invalid config", () => {
+    mkdirSync(join(tmpDir, CONFIG_DIR_NAME), { recursive: true });
     writeFileSync(
-      join(tmpDir, ".refdocs.json"),
+      join(tmpDir, CONFIG_DIR_NAME, CONFIG_FILENAME),
       JSON.stringify({ paths: "not-an-array" })
     );
-    expect(() => loadConfig(tmpDir)).toThrow("Invalid .refdocs.json");
+    expect(() => loadConfig(tmpDir)).toThrow(`Invalid ${CONFIG_DIR_NAME}/${CONFIG_FILENAME}`);
   });
 });
 
@@ -149,7 +110,8 @@ describe("configExists", () => {
   });
 
   it("returns true when config file exists", () => {
-    writeFileSync(join(tmpDir, CONFIG_FILENAME), "{}");
+    mkdirSync(join(tmpDir, CONFIG_DIR_NAME), { recursive: true });
+    writeFileSync(join(tmpDir, CONFIG_DIR_NAME, CONFIG_FILENAME), "{}");
     expect(configExists(tmpDir)).toBe(true);
   });
 });
@@ -165,21 +127,20 @@ describe("initConfig", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("creates .refdocs.json with full defaults", () => {
+  it("creates .refdocs/config.json with full defaults", () => {
     initConfig(tmpDir);
-    const configPath = join(tmpDir, CONFIG_FILENAME);
+    const configPath = join(tmpDir, CONFIG_DIR_NAME, CONFIG_FILENAME);
     expect(existsSync(configPath)).toBe(true);
+    expect(existsSync(join(tmpDir, CONFIG_DIR_NAME))).toBe(true);
 
     const written = JSON.parse(readFileSync(configPath, "utf-8"));
-    expect(written.paths).toEqual(["ref-docs"]);
-    expect(written.index).toBe(".refdocs-index.json");
-    expect(written.chunkMaxTokens).toBe(800);
-    expect(written.chunkMinTokens).toBe(100);
-    expect(written.boostFields).toEqual({ title: 2, headings: 1.5, body: 1 });
+    expect(written.paths).toEqual(["docs"]);
+    expect(written.manifest).toBe("manifest.json");
   });
 
   it("throws if config already exists", () => {
-    writeFileSync(join(tmpDir, CONFIG_FILENAME), "{}");
-    expect(() => initConfig(tmpDir)).toThrow(".refdocs.json already exists");
+    mkdirSync(join(tmpDir, CONFIG_DIR_NAME), { recursive: true });
+    writeFileSync(join(tmpDir, CONFIG_DIR_NAME, CONFIG_FILENAME), "{}");
+    expect(() => initConfig(tmpDir)).toThrow(`${CONFIG_DIR_NAME}/${CONFIG_FILENAME} already exists`);
   });
 });

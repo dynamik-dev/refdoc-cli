@@ -35,8 +35,8 @@ export async function addFromGitHub(
   const branch = options.branch ?? parsed.branch ?? undefined;
   const token = options.token ?? process.env.GITHUB_TOKEN ?? undefined;
   const defaultPath = parsed.subpath
-    ? `ref-docs/${parsed.owner}/${parsed.repo}/${parsed.subpath}`
-    : `ref-docs/${parsed.owner}/${parsed.repo}`;
+    ? `docs/${parsed.owner}/${parsed.repo}/${parsed.subpath}`
+    : `docs/${parsed.owner}/${parsed.repo}`;
   const localPath = options.path ?? defaultPath;
 
   const tarball = await downloadTarball(parsed.owner, parsed.repo, branch, token);
@@ -134,8 +134,9 @@ export function addLocalPath(
   inputPath: string,
   configDir: string,
   config: RefdocsConfig,
+  projectDir: string,
 ): AddLocalResult {
-  const absolutePath = resolve(configDir, inputPath);
+  const absolutePath = resolve(projectDir, inputPath);
 
   if (!existsSync(absolutePath) || !statSync(absolutePath).isDirectory()) {
     throw new Error(`Directory not found: ${inputPath}`);
@@ -166,8 +167,9 @@ export function removePath(
   inputPath: string,
   configDir: string,
   config: RefdocsConfig,
+  projectDir: string,
 ): RemoveResult {
-  const absolutePath = resolve(configDir, inputPath);
+  const absolutePath = resolve(projectDir, inputPath);
   const normalizedPath = relative(configDir, absolutePath);
 
   const pathIndex = config.paths.indexOf(normalizedPath);

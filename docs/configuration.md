@@ -1,10 +1,10 @@
 # Configuration
 
-refdocs is configured via a `.refdocs.json` file at your project root.
+refdocs is configured via a `.refdocs/config.json` file at your project root.
 
 ## Config file resolution
 
-When you run any `refdocs` command, the tool walks up the directory tree from your current working directory looking for `.refdocs.json`. The first one found is used. If no config file is found, defaults are applied and the current directory is treated as the project root.
+When you run any `refdocs` command, the tool walks up the directory tree from your current working directory looking for a `.refdocs/` directory containing `config.json`. The first one found is used. If no config file is found, defaults are applied and the current directory is treated as the project root.
 
 This means you can run `refdocs` from any subdirectory and it will find the project-level config.
 
@@ -12,23 +12,17 @@ This means you can run `refdocs` from any subdirectory and it will find the proj
 
 ```json
 {
-  "paths": ["ref-docs"],
-  "index": ".refdocs-index.json",
-  "chunkMaxTokens": 800,
-  "chunkMinTokens": 100,
-  "boostFields": {
-    "title": 2,
-    "headings": 1.5,
-    "body": 1
-  },
+  "paths": ["docs"],
+  "manifest": "manifest.json",
   "sources": [
     {
+      "type": "github",
       "url": "https://github.com/laravel/docs/tree/11.x",
       "owner": "laravel",
       "repo": "docs",
       "branch": "11.x",
       "subpath": "",
-      "localPath": "ref-docs/docs",
+      "localPath": "docs/laravel/docs",
       "addedAt": "2025-01-15T10:30:00.000Z"
     }
   ]
@@ -40,9 +34,9 @@ This means you can run `refdocs` from any subdirectory and it will find the proj
 ### `paths`
 
 - **Type:** `string[]`
-- **Default:** `["ref-docs"]`
+- **Default:** `["docs"]`
 
-Directories to scan for markdown files, relative to the config file location. All `.md` files within these directories (including subdirectories) are indexed.
+Directories to scan for markdown files, relative to the `.refdocs/` directory. All `.md` and `.mdx` files within these directories (including subdirectories) are cataloged in the manifest.
 
 ```json
 {
@@ -50,58 +44,17 @@ Directories to scan for markdown files, relative to the config file location. Al
 }
 ```
 
-### `index`
+### `manifest`
 
 - **Type:** `string`
-- **Default:** `".refdocs-index.json"`
+- **Default:** `"manifest.json"`
 
-Filename for the persisted search index, relative to the config file location. This file is written by `refdocs index` and read by all other commands.
+Filename for the generated manifest, relative to the `.refdocs/` directory. This file is written by `refdocs manifest` and read by `refdocs list`.
 
-Add this file to `.gitignore` since it's a build artifact:
+The entire `.refdocs/` directory should be added to `.gitignore`:
 
 ```
-.refdocs-index.json
-```
-
-### `chunkMaxTokens`
-
-- **Type:** `number`
-- **Default:** `800`
-
-Upper bound for chunk size in estimated tokens. Sections larger than this are split at paragraph boundaries. Token estimates use a simple heuristic of `ceil(characters / 4)`.
-
-Lower values produce more granular search results. Higher values keep more context per chunk.
-
-### `chunkMinTokens`
-
-- **Type:** `number`
-- **Default:** `100`
-
-Minimum chunk size in estimated tokens. Sections smaller than this are merged with their sibling (a section at the same heading depth).
-
-This prevents trivially small chunks that lack useful context.
-
-### `boostFields`
-
-- **Type:** `{ title: number, headings: number, body: number }`
-- **Default:** `{ "title": 2, "headings": 1.5, "body": 1 }`
-
-Search relevance weights for each indexed field. Higher values make matches in that field rank higher.
-
-- **`title`** - the innermost heading of the chunk
-- **`headings`** - the full heading breadcrumb (e.g. "Config > Database > Connections")
-- **`body`** - the body text of the chunk
-
-Example: to make heading matches even more prominent:
-
-```json
-{
-  "boostFields": {
-    "title": 3,
-    "headings": 2,
-    "body": 1
-  }
-}
+.refdocs/
 ```
 
 ### `sources`
@@ -115,12 +68,13 @@ Each source object has the following fields:
 
 | Field | Description |
 |-------|-------------|
-| `url` | Original GitHub URL passed to `refdocs add` |
+| `type` | Source type (`"github"` or `"file"`) |
+| `url` | Original URL passed to `refdocs add` |
 | `owner` | GitHub repository owner |
 | `repo` | GitHub repository name |
 | `branch` | Branch or ref that was downloaded |
 | `subpath` | Subdirectory filter within the repo (empty string for whole repo) |
-| `localPath` | Where the files were saved, relative to config |
+| `localPath` | Where the files were saved, relative to `.refdocs/` |
 | `addedAt` | ISO 8601 timestamp of when the source was added |
 
 ## Validation
@@ -128,7 +82,7 @@ Each source object has the following fields:
 refdocs validates the config file on every command. If validation fails, you get a specific error message:
 
 ```
-Invalid .refdocs.json: "paths" must be an array of strings; "chunkMaxTokens" must be a positive number
+Invalid .refdocs/config.json: "paths" must be an array of strings
 ```
 
 All fields are optional. Any omitted field uses its default value.

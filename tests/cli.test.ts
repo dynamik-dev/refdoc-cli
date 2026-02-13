@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { execSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -31,15 +31,15 @@ describe("CLI", () => {
 
   beforeAll(() => {
     tmpDir = mkdtempSync(join(tmpdir(), "refdocs-cli-"));
-    mkdirSync(join(tmpDir, "docs"), { recursive: true });
+    mkdirSync(join(tmpDir, ".refdocs", "docs"), { recursive: true });
 
     writeFileSync(
-      join(tmpDir, ".refdocs.json"),
+      join(tmpDir, ".refdocs", "config.json"),
       JSON.stringify({ paths: ["docs"] })
     );
 
     writeFileSync(
-      join(tmpDir, "docs", "api.md"),
+      join(tmpDir, ".refdocs", "docs", "api.md"),
       [
         "# API Reference",
         "",
@@ -59,7 +59,7 @@ describe("CLI", () => {
     );
 
     writeFileSync(
-      join(tmpDir, "docs", "guide.md"),
+      join(tmpDir, ".refdocs", "docs", "guide.md"),
       [
         "# Getting Started",
         "",
@@ -89,132 +89,41 @@ describe("CLI", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  describe("refdocs index", () => {
-    it("indexes files and prints summary", () => {
-      const { stdout, exitCode } = run("index", tmpDir);
+  describe("refdocs manifest", () => {
+    it("generates manifest and prints summary", () => {
+      const { stdout, exitCode } = run("manifest", tmpDir);
       expect(exitCode).toBe(0);
-      expect(stdout).toContain("Indexed 2 files");
-      expect(stdout).toContain("chunks");
-      expect(stdout).toContain("KB");
-      expect(stdout).toContain("Done in");
-    });
-  });
-
-  describe("refdocs search", () => {
-    it("returns relevant results", () => {
-      run("index", tmpDir);
-      const { stdout, exitCode } = run('search "authentication"', tmpDir);
-      expect(exitCode).toBe(0);
-      expect(stdout).toContain("Bearer tokens");
+      expect(stdout).toContain("Manifest:");
+      expect(stdout).toContain("2 files");
     });
 
-    it("shows formatted output with file and line info", () => {
-      const { stdout } = run('search "rate limiting"', tmpDir);
-      expect(stdout).toMatch(/# \[\d+\] docs\/api\.md:\d+-\d+/);
-    });
-
-    it("supports --json flag", () => {
-      const { stdout } = run('search --json "authentication"', tmpDir);
-      const results = JSON.parse(stdout);
-      expect(Array.isArray(results)).toBe(true);
-      expect(results.length).toBeGreaterThan(0);
-      expect(results[0]).toHaveProperty("score");
-      expect(results[0]).toHaveProperty("file");
-      expect(results[0]).toHaveProperty("lines");
-      expect(results[0]).toHaveProperty("headings");
-      expect(results[0]).toHaveProperty("body");
-    });
-
-    it("supports --raw flag", () => {
-      const { stdout } = run('search --raw "authentication"', tmpDir);
-      // Raw output should not contain the metadata header
-      expect(stdout).not.toMatch(/^# \[/m);
-      expect(stdout).toContain("Bearer tokens");
-    });
-
-    it("supports -n flag to limit results", () => {
-      const { stdout } = run('search -n 1 --json "api"', tmpDir);
-      const results = JSON.parse(stdout);
-      expect(results).toHaveLength(1);
-    });
-
-    it("supports -f flag to filter by file", () => {
-      const { stdout } = run('search -f "docs/guide*" --json "install"', tmpDir);
-      const results = JSON.parse(stdout);
-      for (const r of results) {
-        expect(r.file).toMatch(/^docs\/guide/);
-      }
-    });
-
-    it("shows message when no results found", () => {
-      const { stdout } = run('search "xyznonexistent"', tmpDir);
-      expect(stdout).toContain("No results found");
-    });
-  });
-
-  describe("refdocs eval", () => {
-    it("supports eval suite output as JSON", () => {
-      run("index", tmpDir);
-      writeFileSync(
-        join(tmpDir, "eval-suite.json"),
-        JSON.stringify({
-          name: "cli-eval",
-          maxResults: 4,
-          cases: [
-            {
-              id: "auth-query",
-              query: "authentication bearer token",
-              facets: ["authentication", "token", "authorization header"],
-            },
-          ],
-        }, null, 2)
-      );
-
-      const { stdout, exitCode } = run("eval eval-suite.json --json", tmpDir);
-      expect(exitCode).toBe(0);
-      const report = JSON.parse(stdout);
-      expect(report).toHaveProperty("summary");
-      expect(report.summary).toHaveProperty("totalCases");
-      expect(report.summary.totalCases).toBe(1);
-      expect(report).toHaveProperty("cases");
+    it("creates manifest file on disk", () => {
+      run("manifest", tmpDir);
+      expect(existsSync(join(tmpDir, ".refdocs", "manifest.json"))).toBe(true);
     });
   });
 
   describe("refdocs list", () => {
-    it("lists indexed files with chunk counts", () => {
+    it("lists files with heading counts", () => {
+      run("manifest", tmpDir);
       const { stdout, exitCode } = run("list", tmpDir);
       expect(exitCode).toBe(0);
       expect(stdout).toContain("docs/api.md");
       expect(stdout).toContain("docs/guide.md");
-      expect(stdout).toContain("chunk");
+      expect(stdout).toContain("heading");
       expect(stdout).toContain("total");
     });
   });
 
-  describe("refdocs info", () => {
-    it("shows chunks for a specific file", () => {
-      const { stdout, exitCode } = run("info docs/api.md", tmpDir);
-      expect(exitCode).toBe(0);
-      expect(stdout).toContain("docs/api.md");
-      expect(stdout).toContain("tokens");
-    });
-
-    it("errors for unknown file", () => {
-      const { stderr, exitCode } = run("info nonexistent.md", tmpDir);
-      expect(exitCode).toBe(1);
-      expect(stderr).toContain("No chunks found");
-    });
-  });
-
-  describe("error handling", () => {
-    it("errors when searching without index", () => {
-      const emptyDir = mkdtempSync(join(tmpdir(), "refdocs-empty-"));
+  describe("refdocs init", () => {
+    it("creates config file", () => {
+      const initDir = mkdtempSync(join(tmpdir(), "refdocs-init-"));
       try {
-        const { stderr, exitCode } = run('search "test"', emptyDir);
-        expect(exitCode).toBe(1);
-        expect(stderr).toContain("Index not found");
+        const { exitCode } = run("init", initDir);
+        expect(exitCode).toBe(0);
+        expect(existsSync(join(initDir, ".refdocs", "config.json"))).toBe(true);
       } finally {
-        rmSync(emptyDir, { recursive: true, force: true });
+        rmSync(initDir, { recursive: true, force: true });
       }
     });
   });

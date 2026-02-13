@@ -20,50 +20,20 @@ export type Source = GitHubSource | FileSource;
 
 export interface RefdocsConfig {
   paths: string[];
-  index: string;
-  chunkMaxTokens: number;
-  chunkMinTokens: number;
-  boostFields: {
-    title: number;
-    headings: number;
-    body: number;
-  };
+  manifest: string;
   sources?: Source[];
 }
 
-export interface Chunk {
-  id: string;
+export interface ManifestEntry {
   file: string;
-  title: string;
-  headings: string;
-  body: string;
-  startLine: number;
-  endLine: number;
-  tokenEstimate: number;
-}
-
-export interface SearchResult {
-  score: number;
-  file: string;
-  lines: [number, number];
   headings: string[];
-  body: string;
-  tokenEstimate?: number;
+  lines: number;
+  summary: string;
 }
 
-export interface SearchOptions {
-  maxResults: number;
-  fileFilter?: string;
-}
-
-export interface IndexSummary {
-  filesIndexed: number;
-  chunksCreated: number;
-  indexSizeBytes: number;
-  elapsedMs: number;
-  // Present only for incremental builds
-  unchanged?: number;
-  added?: number;
-  changed?: number;
-  removed?: number;
+export interface Manifest {
+  generated: string;
+  sources: number;
+  files: number;
+  entries: ManifestEntry[];
 }

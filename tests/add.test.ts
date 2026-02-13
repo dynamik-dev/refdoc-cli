@@ -118,11 +118,8 @@ describe("updateSources", () => {
 
   it("re-downloads files for all configured sources", async () => {
     const config: RefdocsConfig = {
-      paths: ["ref-docs/test-repo"],
-      index: ".refdocs-index.json",
-      chunkMaxTokens: 800,
-      chunkMinTokens: 100,
-      boostFields: { title: 2, headings: 1.5, body: 1 },
+      paths: ["docs/test-repo"],
+      manifest: "manifest.json",
       sources: [
         {
           type: "github",
@@ -131,7 +128,7 @@ describe("updateSources", () => {
           repo: "repo",
           branch: "main",
           subpath: "docs",
-          localPath: "ref-docs/test-repo",
+          localPath: "docs/test-repo",
           addedAt: "2025-01-01T00:00:00.000Z",
         },
       ],
@@ -145,17 +142,14 @@ describe("updateSources", () => {
       expect(results[0].source.owner).toBe("test");
     }
 
-    expect(existsSync(join(tmpDir, "ref-docs/test-repo", "guide.md"))).toBe(true);
-    expect(existsSync(join(tmpDir, "ref-docs/test-repo", "api.md"))).toBe(true);
+    expect(existsSync(join(tmpDir, "docs/test-repo", "guide.md"))).toBe(true);
+    expect(existsSync(join(tmpDir, "docs/test-repo", "api.md"))).toBe(true);
   });
 
   it("handles multiple sources", async () => {
     const config: RefdocsConfig = {
-      paths: ["ref-docs/a", "ref-docs/b"],
-      index: ".refdocs-index.json",
-      chunkMaxTokens: 800,
-      chunkMinTokens: 100,
-      boostFields: { title: 2, headings: 1.5, body: 1 },
+      paths: ["docs/a", "docs/b"],
+      manifest: "manifest.json",
       sources: [
         {
           type: "github",
@@ -164,7 +158,7 @@ describe("updateSources", () => {
           repo: "a",
           branch: "HEAD",
           subpath: "",
-          localPath: "ref-docs/a",
+          localPath: "docs/a",
           addedAt: "2025-01-01T00:00:00.000Z",
         },
         {
@@ -174,7 +168,7 @@ describe("updateSources", () => {
           repo: "b",
           branch: "main",
           subpath: "docs",
-          localPath: "ref-docs/b",
+          localPath: "docs/b",
           addedAt: "2025-01-01T00:00:00.000Z",
         },
       ],
@@ -189,10 +183,7 @@ describe("updateSources", () => {
   it("throws when no sources are configured", async () => {
     const config: RefdocsConfig = {
       paths: [],
-      index: ".refdocs-index.json",
-      chunkMaxTokens: 800,
-      chunkMinTokens: 100,
-      boostFields: { title: 2, headings: 1.5, body: 1 },
+      manifest: "manifest.json",
     };
 
     await expect(updateSources(config, tmpDir)).rejects.toThrow("No sources configured");
@@ -204,6 +195,7 @@ describe("config updates via addFromGitHub", () => {
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), "refdocs-add-cfg-"));
+    mkdirSync(tmpDir, { recursive: true });
   });
 
   afterEach(() => {
@@ -214,41 +206,41 @@ describe("config updates via addFromGitHub", () => {
     const { saveConfig } = await import("../src/config.js");
 
     writeFileSync(
-      join(tmpDir, ".refdocs.json"),
+      join(tmpDir, "config.json"),
       JSON.stringify({ paths: ["docs"], chunkMaxTokens: 500 }),
     );
 
-    saveConfig({ paths: ["docs", "ref-docs/laravel"] }, tmpDir);
+    saveConfig({ paths: ["docs", "docs/laravel"] }, tmpDir);
 
-    const result = JSON.parse(readFileSync(join(tmpDir, ".refdocs.json"), "utf-8"));
-    expect(result.paths).toEqual(["docs", "ref-docs/laravel"]);
+    const result = JSON.parse(readFileSync(join(tmpDir, "config.json"), "utf-8"));
+    expect(result.paths).toEqual(["docs", "docs/laravel"]);
     expect(result.chunkMaxTokens).toBe(500);
   });
 
   it("saveConfig creates config if none exists", async () => {
     const { saveConfig } = await import("../src/config.js");
 
-    saveConfig({ paths: ["ref-docs/test"] }, tmpDir);
+    saveConfig({ paths: ["docs/test"] }, tmpDir);
 
-    const result = JSON.parse(readFileSync(join(tmpDir, ".refdocs.json"), "utf-8"));
-    expect(result.paths).toEqual(["ref-docs/test"]);
+    const result = JSON.parse(readFileSync(join(tmpDir, "config.json"), "utf-8"));
+    expect(result.paths).toEqual(["docs/test"]);
   });
 });
 
 describe("addLocalPath", () => {
   let tmpDir: string;
+  let configDir: string;
 
   const baseConfig: RefdocsConfig = {
     paths: ["existing-docs"],
-    index: ".refdocs-index.json",
-    chunkMaxTokens: 800,
-    chunkMinTokens: 100,
-    boostFields: { title: 2, headings: 1.5, body: 1 },
+    manifest: "manifest.json",
   };
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), "refdocs-addlocal-"));
-    writeFileSync(join(tmpDir, ".refdocs.json"), JSON.stringify(baseConfig));
+    configDir = join(tmpDir, ".refdocs");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, "config.json"), JSON.stringify(baseConfig));
   });
 
   afterEach(() => {
@@ -260,27 +252,29 @@ describe("addLocalPath", () => {
     mkdirSync(docsDir, { recursive: true });
     writeFileSync(join(docsDir, "readme.md"), "# Hello");
 
-    const result = addLocalPath("my-docs", tmpDir, baseConfig);
-    expect(result.localPath).toBe("my-docs");
+    const result = addLocalPath("my-docs", configDir, baseConfig, tmpDir);
+    expect(result.localPath).toBe("../my-docs");
 
-    const saved = JSON.parse(readFileSync(join(tmpDir, ".refdocs.json"), "utf-8"));
-    expect(saved.paths).toEqual(["existing-docs", "my-docs"]);
+    const saved = JSON.parse(readFileSync(join(configDir, "config.json"), "utf-8"));
+    expect(saved.paths).toEqual(["existing-docs", "../my-docs"]);
   });
 
   it("skips duplicate paths", () => {
-    const docsDir = join(tmpDir, "existing-docs");
+    const docsDir = join(tmpDir, ".refdocs", "existing-docs");
     mkdirSync(docsDir, { recursive: true });
     writeFileSync(join(docsDir, "readme.md"), "# Hello");
 
-    const result = addLocalPath("existing-docs", tmpDir, baseConfig);
+    // "existing-docs" resolves to .refdocs/existing-docs relative to configDir
+    // When projectDir is tmpDir and inputPath is ".refdocs/existing-docs", it resolves to the same
+    const result = addLocalPath(".refdocs/existing-docs", configDir, baseConfig, tmpDir);
     expect(result.localPath).toBe("existing-docs");
 
-    const saved = JSON.parse(readFileSync(join(tmpDir, ".refdocs.json"), "utf-8"));
+    const saved = JSON.parse(readFileSync(join(configDir, "config.json"), "utf-8"));
     expect(saved.paths).toEqual(["existing-docs"]);
   });
 
   it("throws for nonexistent directory", () => {
-    expect(() => addLocalPath("nope", tmpDir, baseConfig)).toThrow("Directory not found: nope");
+    expect(() => addLocalPath("nope", configDir, baseConfig, tmpDir)).toThrow("Directory not found: nope");
   });
 
   it("throws if directory has no .md/.mdx files", () => {
@@ -288,7 +282,7 @@ describe("addLocalPath", () => {
     mkdirSync(emptyDir, { recursive: true });
     writeFileSync(join(emptyDir, "data.json"), "{}");
 
-    expect(() => addLocalPath("empty", tmpDir, baseConfig)).toThrow("No .md/.mdx files found");
+    expect(() => addLocalPath("empty", configDir, baseConfig, tmpDir)).toThrow("No .md/.mdx files found");
   });
 
   it("accepts a directory with only .mdx files", () => {
@@ -296,8 +290,8 @@ describe("addLocalPath", () => {
     mkdirSync(mdxDir, { recursive: true });
     writeFileSync(join(mdxDir, "page.mdx"), "# MDX Page");
 
-    const result = addLocalPath("mdx-docs", tmpDir, baseConfig);
-    expect(result.localPath).toBe("mdx-docs");
+    const result = addLocalPath("mdx-docs", configDir, baseConfig, tmpDir);
+    expect(result.localPath).toBe("../mdx-docs");
   });
 
   it("finds .md files in subdirectories", () => {
@@ -306,20 +300,18 @@ describe("addLocalPath", () => {
     mkdirSync(childDir, { recursive: true });
     writeFileSync(join(childDir, "nested.md"), "# Nested");
 
-    const result = addLocalPath("parent", tmpDir, baseConfig);
-    expect(result.localPath).toBe("parent");
+    const result = addLocalPath("parent", configDir, baseConfig, tmpDir);
+    expect(result.localPath).toBe("../parent");
   });
 });
 
 describe("removePath", () => {
   let tmpDir: string;
+  let configDir: string;
 
   const baseConfig: RefdocsConfig = {
-    paths: ["docs", "ref-docs/laravel"],
-    index: ".refdocs-index.json",
-    chunkMaxTokens: 800,
-    chunkMinTokens: 100,
-    boostFields: { title: 2, headings: 1.5, body: 1 },
+    paths: ["../my-docs", "docs/laravel"],
+    manifest: "manifest.json",
     sources: [
       {
         type: "github",
@@ -328,7 +320,7 @@ describe("removePath", () => {
         repo: "docs",
         branch: "11.x",
         subpath: "",
-        localPath: "ref-docs/laravel",
+        localPath: "docs/laravel",
         addedAt: "2025-01-01T00:00:00.000Z",
       },
     ],
@@ -336,7 +328,9 @@ describe("removePath", () => {
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), "refdocs-remove-"));
-    writeFileSync(join(tmpDir, ".refdocs.json"), JSON.stringify(baseConfig));
+    configDir = join(tmpDir, ".refdocs");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, "config.json"), JSON.stringify(baseConfig));
   });
 
   afterEach(() => {
@@ -344,26 +338,28 @@ describe("removePath", () => {
   });
 
   it("removes a path from config", () => {
-    const result = removePath("docs", tmpDir, baseConfig);
+    const result = removePath("my-docs", configDir, baseConfig, tmpDir);
     expect(result.removed).toBe(true);
     expect(result.sourceRemoved).toBe(false);
 
-    const saved = JSON.parse(readFileSync(join(tmpDir, ".refdocs.json"), "utf-8"));
-    expect(saved.paths).toEqual(["ref-docs/laravel"]);
+    const saved = JSON.parse(readFileSync(join(configDir, "config.json"), "utf-8"));
+    expect(saved.paths).toEqual(["docs/laravel"]);
   });
 
   it("also removes matching source", () => {
-    const result = removePath("ref-docs/laravel", tmpDir, baseConfig);
+    // "docs/laravel" relative to configDir is ".refdocs/docs/laravel"
+    // When input is ".refdocs/docs/laravel" relative to projectDir, it resolves correctly
+    const result = removePath(".refdocs/docs/laravel", configDir, baseConfig, tmpDir);
     expect(result.removed).toBe(true);
     expect(result.sourceRemoved).toBe(true);
 
-    const saved = JSON.parse(readFileSync(join(tmpDir, ".refdocs.json"), "utf-8"));
-    expect(saved.paths).toEqual(["docs"]);
+    const saved = JSON.parse(readFileSync(join(configDir, "config.json"), "utf-8"));
+    expect(saved.paths).toEqual(["../my-docs"]);
     expect(saved.sources).toEqual([]);
   });
 
   it("returns removed: false for unknown path", () => {
-    const result = removePath("nonexistent", tmpDir, baseConfig);
+    const result = removePath("nonexistent", configDir, baseConfig, tmpDir);
     expect(result.removed).toBe(false);
     expect(result.sourceRemoved).toBe(false);
   });
@@ -371,42 +367,42 @@ describe("removePath", () => {
 
 describe("isPathCovered", () => {
   it("returns true for exact match", () => {
-    expect(isPathCovered(["ref-docs"], "ref-docs")).toBe(true);
+    expect(isPathCovered(["docs"], "docs")).toBe(true);
   });
 
   it("returns true when new path is a subdirectory of existing", () => {
-    expect(isPathCovered(["ref-docs"], "ref-docs/honojs/website/docs")).toBe(true);
+    expect(isPathCovered(["docs"], "docs/honojs/website/docs")).toBe(true);
   });
 
   it("returns false when new path is not covered", () => {
-    expect(isPathCovered(["docs"], "ref-docs/honojs")).toBe(false);
+    expect(isPathCovered(["my-docs"], "docs/honojs")).toBe(false);
   });
 
   it("returns false when new path is a parent of existing", () => {
-    expect(isPathCovered(["ref-docs/honojs"], "ref-docs")).toBe(false);
+    expect(isPathCovered(["docs/honojs"], "docs")).toBe(false);
   });
 
   it("returns false for shared prefix that is not parent-child", () => {
-    expect(isPathCovered(["ref-docs-v2"], "ref-docs")).toBe(false);
-    expect(isPathCovered(["ref-docs"], "ref-docs-v2")).toBe(false);
+    expect(isPathCovered(["docs-v2"], "docs")).toBe(false);
+    expect(isPathCovered(["docs"], "docs-v2")).toBe(false);
   });
 
   it("returns false for empty paths array", () => {
-    expect(isPathCovered([], "ref-docs")).toBe(false);
+    expect(isPathCovered([], "docs")).toBe(false);
   });
 });
 
 describe("addFromGitHub overlapping paths", () => {
   let tmpDir: string;
+  let configDir: string;
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), "refdocs-overlap-"));
-    writeFileSync(join(tmpDir, ".refdocs.json"), JSON.stringify({
-      paths: ["ref-docs"],
-      index: ".refdocs-index.json",
-      chunkMaxTokens: 800,
-      chunkMinTokens: 100,
-      boostFields: { title: 2, headings: 1.5, body: 1 },
+    configDir = join(tmpDir, ".refdocs");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(join(configDir, "config.json"), JSON.stringify({
+      paths: ["docs"],
+      manifest: "manifest.json",
     }));
   });
 
@@ -418,45 +414,39 @@ describe("addFromGitHub overlapping paths", () => {
     const { addFromGitHub } = await import("../src/add.js");
 
     const config: RefdocsConfig = {
-      paths: ["ref-docs"],
-      index: ".refdocs-index.json",
-      chunkMaxTokens: 800,
-      chunkMinTokens: 100,
-      boostFields: { title: 2, headings: 1.5, body: 1 },
+      paths: ["docs"],
+      manifest: "manifest.json",
     };
 
     await addFromGitHub(
       "https://github.com/honojs/website/tree/main/docs",
-      { path: "ref-docs/honojs/website/docs" },
-      tmpDir,
+      { path: "docs/honojs/website/docs" },
+      configDir,
       config,
     );
 
-    const saved = JSON.parse(readFileSync(join(tmpDir, ".refdocs.json"), "utf-8"));
-    expect(saved.paths).toEqual(["ref-docs"]);
+    const saved = JSON.parse(readFileSync(join(configDir, "config.json"), "utf-8"));
+    expect(saved.paths).toEqual(["docs"]);
   });
 
   it("adds path when not covered by existing paths", async () => {
     const { addFromGitHub } = await import("../src/add.js");
 
     const config: RefdocsConfig = {
-      paths: ["docs"],
-      index: ".refdocs-index.json",
-      chunkMaxTokens: 800,
-      chunkMinTokens: 100,
-      boostFields: { title: 2, headings: 1.5, body: 1 },
+      paths: ["my-docs"],
+      manifest: "manifest.json",
     };
 
-    writeFileSync(join(tmpDir, ".refdocs.json"), JSON.stringify(config));
+    writeFileSync(join(configDir, "config.json"), JSON.stringify(config));
 
     await addFromGitHub(
       "https://github.com/honojs/website/tree/main/docs",
-      { path: "ref-docs/honojs/website/docs" },
-      tmpDir,
+      { path: "docs/honojs/website/docs" },
+      configDir,
       config,
     );
 
-    const saved = JSON.parse(readFileSync(join(tmpDir, ".refdocs.json"), "utf-8"));
-    expect(saved.paths).toContain("ref-docs/honojs/website/docs");
+    const saved = JSON.parse(readFileSync(join(configDir, "config.json"), "utf-8"));
+    expect(saved.paths).toContain("docs/honojs/website/docs");
   });
 });

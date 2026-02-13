@@ -1,20 +1,14 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { homedir } from "node:os";
-import type { RefdocsConfig, Source } from "./types.js";
+import type { RefdocsConfig } from "./types.js";
 
-export const CONFIG_FILENAME = ".refdocs.json";
+export const CONFIG_DIR_NAME = ".refdocs";
+export const CONFIG_FILENAME = "config.json";
 
 const DEFAULT_CONFIG: RefdocsConfig = {
-  paths: ["ref-docs"],
-  index: ".refdocs-index.json",
-  chunkMaxTokens: 800,
-  chunkMinTokens: 100,
-  boostFields: {
-    title: 2,
-    headings: 1.5,
-    body: 1,
-  },
+  paths: ["docs"],
+  manifest: "manifest.json",
 };
 
 export interface ConfigResult {
@@ -26,7 +20,6 @@ function mergeWithDefaults(raw: Record<string, unknown>): RefdocsConfig {
   return {
     ...DEFAULT_CONFIG,
     ...raw,
-    boostFields: { ...DEFAULT_CONFIG.boostFields, ...(raw.boostFields as Partial<RefdocsConfig["boostFields"]>) },
   } as RefdocsConfig;
 }
 
@@ -35,18 +28,19 @@ export function loadConfig(cwd?: string): ConfigResult {
   let dir = startDir;
 
   while (true) {
-    const configPath = join(dir, CONFIG_FILENAME);
+    const configDir = join(dir, CONFIG_DIR_NAME);
+    const configPath = join(configDir, CONFIG_FILENAME);
     if (existsSync(configPath)) {
       const raw = JSON.parse(readFileSync(configPath, "utf-8"));
       const errors = validateConfig(raw);
       if (errors.length > 0) {
         throw new Error(
-          `Invalid ${CONFIG_FILENAME}: ${errors.join("; ")}`
+          `Invalid ${CONFIG_DIR_NAME}/${CONFIG_FILENAME}: ${errors.join("; ")}`
         );
       }
       return {
         config: mergeWithDefaults(raw),
-        configDir: dir,
+        configDir,
       };
     }
     const parent = dirname(dir);
@@ -54,7 +48,7 @@ export function loadConfig(cwd?: string): ConfigResult {
     dir = parent;
   }
 
-  return { config: DEFAULT_CONFIG, configDir: startDir };
+  return { config: DEFAULT_CONFIG, configDir: join(startDir, CONFIG_DIR_NAME) };
 }
 
 export function validateConfig(raw: unknown): string[] {
@@ -71,33 +65,8 @@ export function validateConfig(raw: unknown): string[] {
     }
   }
 
-  if (obj.index !== undefined && typeof obj.index !== "string") {
-    errors.push('"index" must be a string');
-  }
-
-  if (obj.chunkMaxTokens !== undefined) {
-    if (typeof obj.chunkMaxTokens !== "number" || obj.chunkMaxTokens <= 0) {
-      errors.push('"chunkMaxTokens" must be a positive number');
-    }
-  }
-
-  if (obj.chunkMinTokens !== undefined) {
-    if (typeof obj.chunkMinTokens !== "number" || obj.chunkMinTokens <= 0) {
-      errors.push('"chunkMinTokens" must be a positive number');
-    }
-  }
-
-  if (obj.boostFields !== undefined) {
-    if (typeof obj.boostFields !== "object" || obj.boostFields === null || Array.isArray(obj.boostFields)) {
-      errors.push('"boostFields" must be an object');
-    } else {
-      const bf = obj.boostFields as Record<string, unknown>;
-      for (const key of ["title", "headings", "body"]) {
-        if (bf[key] !== undefined && typeof bf[key] !== "number") {
-          errors.push(`"boostFields.${key}" must be a number`);
-        }
-      }
-    }
+  if (obj.manifest !== undefined && typeof obj.manifest !== "string") {
+    errors.push('"manifest" must be a string');
   }
 
   if (obj.sources !== undefined) {
@@ -116,15 +85,17 @@ export function validateConfig(raw: unknown): string[] {
   return errors;
 }
 
-export function configExists(configDir: string): boolean {
-  return existsSync(join(configDir, CONFIG_FILENAME));
+export function configExists(projectDir: string): boolean {
+  return existsSync(join(projectDir, CONFIG_DIR_NAME, CONFIG_FILENAME));
 }
 
-export function initConfig(configDir: string): void {
+export function initConfig(projectDir: string): void {
+  const configDir = join(projectDir, CONFIG_DIR_NAME);
   const configPath = join(configDir, CONFIG_FILENAME);
   if (existsSync(configPath)) {
-    throw new Error(`${CONFIG_FILENAME} already exists in ${configDir}`);
+    throw new Error(`${CONFIG_DIR_NAME}/${CONFIG_FILENAME} already exists in ${projectDir}`);
   }
+  mkdirSync(configDir, { recursive: true });
   writeFileSync(configPath, JSON.stringify(DEFAULT_CONFIG, null, 2) + "\n", "utf-8");
 }
 
@@ -147,11 +118,7 @@ export function initGlobalConfig(globalDir?: string): void {
   mkdirSync(dir, { recursive: true });
   const configPath = join(dir, CONFIG_FILENAME);
   if (existsSync(configPath)) return;
-  const globalDefault: RefdocsConfig = {
-    ...DEFAULT_CONFIG,
-    paths: ["docs"],
-  };
-  writeFileSync(configPath, JSON.stringify(globalDefault, null, 2) + "\n", "utf-8");
+  writeFileSync(configPath, JSON.stringify(DEFAULT_CONFIG, null, 2) + "\n", "utf-8");
 }
 
 export function loadGlobalConfig(globalDir?: string): ConfigResult | null {

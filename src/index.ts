@@ -1,16 +1,12 @@
 #!/usr/bin/env node
 
-import { Command, InvalidArgumentError } from "commander";
-import { join } from "node:path";
-import { existsSync } from "node:fs";
+import { Command } from "commander";
+import { join, dirname } from "node:path";
 import { createRequire } from "node:module";
-import { loadConfig, configExists, initConfig, loadGlobalConfig, initGlobalConfig, getGlobalConfigDir } from "./config.js";
-import { buildAndPersistIndex, loadPersistedIndex } from "./indexer.js";
-import { searchAllIndexes } from "./search.js";
-import type { IndexSource } from "./search.js";
+import { loadConfig, configExists, initConfig, loadGlobalConfig, initGlobalConfig, getGlobalConfigDir, CONFIG_DIR_NAME, CONFIG_FILENAME } from "./config.js";
+import { buildAndPersistManifest, findMarkdownFiles, loadManifest } from "./manifest.js";
 import { addFromGitHub, addLocalPath, removePath, updateSources } from "./add.js";
-import { loadEvalSuite, runEvalSuite } from "./eval.js";
-import type { SearchResult } from "./types.js";
+import type { Source, Manifest } from "./types.js";
 
 const require = createRequire(import.meta.url);
 const { version } = require("../package.json");
@@ -19,21 +15,21 @@ const program = new Command();
 
 program
   .name("refdocs")
-  .description("Local CLI tool for indexing and searching markdown documentation")
+  .description("Local CLI tool for fetching, organizing, and cataloging markdown documentation")
   .version(version);
 
 program
   .command("init")
-  .description("Create a .refdocs.json config file with defaults")
+  .description("Create .refdocs/config.json with defaults")
   .option("-g, --global", "initialize global config at ~/.refdocs/")
   .action((opts: { global?: boolean }) => {
     try {
       if (opts.global) {
         initGlobalConfig();
-        console.log(`Created global config at ${getGlobalConfigDir()}/.refdocs.json`);
+        console.log(`Created global config at ${getGlobalConfigDir()}/${CONFIG_FILENAME}`);
       } else {
         initConfig(process.cwd());
-        console.log("Created .refdocs.json with default configuration.");
+        console.log(`Created ${CONFIG_DIR_NAME}/${CONFIG_FILENAME} with default configuration.`);
       }
     } catch (err) {
       console.error((err as Error).message);
@@ -42,96 +38,24 @@ program
   });
 
 program
-  .command("index")
-  .description("Index all markdown files in configured paths")
-  .option("-g, --global", "index the global config")
-  .option("--full", "force a full rebuild (skip incremental)")
-  .action((opts: { global?: boolean; full?: boolean }) => {
+  .command("manifest")
+  .description("Generate the documentation manifest")
+  .option("-g, --global", "generate manifest for global config")
+  .action((opts: { global?: boolean }) => {
     try {
+      const label = opts.global ? "[global] " : "";
       if (opts.global) {
         const globalResult = loadGlobalConfig();
         if (!globalResult) {
           console.error("No global config found. Run `refdocs init --global` first.");
           process.exit(1);
         }
-        const summary = buildAndPersistIndex(globalResult.config, globalResult.configDir, { force: opts.full });
-        printIndexSummary(summary, "[global] ");
+        const manifest = buildAndPersistManifest(globalResult.config, globalResult.configDir);
+        printManifestSummary(manifest, label);
       } else {
         const { config, configDir } = loadConfig();
-        const summary = buildAndPersistIndex(config, configDir, { force: opts.full });
-        printIndexSummary(summary, "");
-      }
-    } catch (err) {
-      console.error((err as Error).message);
-      process.exit(1);
-    }
-  });
-
-program
-  .command("search <query>")
-  .description("Fuzzy search the index and return top chunks")
-  .option("-n, --results <count>", "number of results (1-10)", (value: string) => {
-    const n = parseInt(value, 10);
-    if (isNaN(n) || n < 1 || n > 10) {
-      throw new InvalidArgumentError(`Invalid value "${value}". Must be a number between 1 and 10.`);
-    }
-    return n;
-  }, 3)
-  .option("-f, --file <pattern>", "filter results to files matching glob")
-  .option("--json", "output as JSON")
-  .option("--raw", "output chunk body only, no metadata")
-  .action((query: string, opts: { results: number; file?: string; json?: boolean; raw?: boolean }) => {
-    try {
-      const sources = resolveIndexSources();
-      const results = searchAllIndexes(sources, query, {
-        maxResults: opts.results,
-        fileFilter: opts.file,
-      });
-
-      if (results.length === 0) {
-        console.log("No results found.");
-        return;
-      }
-
-      if (opts.json) {
-        console.log(JSON.stringify(results, null, 2));
-      } else if (opts.raw) {
-        for (const r of results) {
-          console.log(r.body);
-          console.log("");
-        }
-      } else {
-        formatResults(results);
-      }
-    } catch (err) {
-      console.error((err as Error).message);
-      process.exit(1);
-    }
-  });
-
-program
-  .command("eval <suite>")
-  .description("Evaluate search relevance/token efficiency against an eval suite JSON file")
-  .option("-n, --results <count>", "default results per query (1-20)", (value: string) => {
-    const n = parseInt(value, 10);
-    if (isNaN(n) || n < 1 || n > 20) {
-      throw new InvalidArgumentError(`Invalid value "${value}". Must be a number between 1 and 20.`);
-    }
-    return n;
-  })
-  .option("--json", "output eval report as JSON")
-  .action((suitePath: string, opts: { results?: number; json?: boolean }) => {
-    try {
-      const suite = loadEvalSuite(suitePath);
-      const sources = resolveIndexSources();
-      const report = runEvalSuite(sources, suite, {
-        maxResults: opts.results,
-      });
-
-      if (opts.json) {
-        console.log(JSON.stringify(report, null, 2));
-      } else {
-        formatEvalReport(report);
+        const manifest = buildAndPersistManifest(config, configDir);
+        printManifestSummary(manifest, label);
       }
     } catch (err) {
       console.error((err as Error).message);
@@ -141,8 +65,8 @@ program
 
 program
   .command("list")
-  .description("List all indexed files and their chunk counts")
-  .option("-g, --global", "list global indexed files")
+  .description("List all documented files and their heading counts")
+  .option("-g, --global", "list global documented files")
   .action((opts: { global?: boolean }) => {
     try {
       let config, configDir;
@@ -158,57 +82,26 @@ program
         ({ config, configDir } = loadConfig());
       }
 
-      const indexPath = join(configDir, config.index);
-      const { chunks } = loadPersistedIndex(indexPath, config);
-
-      const byFile = new Map<string, number>();
-      for (const chunk of chunks) {
-        byFile.set(chunk.file, (byFile.get(chunk.file) || 0) + 1);
-      }
-
       const label = opts.global ? "[global] " : "";
-      for (const [file, count] of [...byFile.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-        console.log(`${label}${file} (${count} chunk${count !== 1 ? "s" : ""})`);
-      }
-      console.log(`\n${byFile.size} files, ${chunks.length} chunks total`);
-    } catch (err) {
-      console.error((err as Error).message);
-      process.exit(1);
-    }
-  });
+      const manifestPath = join(configDir, config.manifest);
 
-program
-  .command("info <file>")
-  .description("Show all chunks for a specific file")
-  .option("-g, --global", "show info from global index")
-  .action((file: string, opts: { global?: boolean }) => {
-    try {
-      let config, configDir;
-      if (opts.global) {
-        const globalResult = loadGlobalConfig();
-        if (!globalResult) {
-          console.error("No global config found. Run `refdocs init --global` first.");
-          process.exit(1);
-        }
-        config = globalResult.config;
-        configDir = globalResult.configDir;
-      } else {
-        ({ config, configDir } = loadConfig());
+      let entries: Manifest["entries"];
+      try {
+        const manifest = loadManifest(manifestPath);
+        entries = manifest.entries;
+      } catch {
+        // No manifest yet — scan filesystem directly
+        const files = findMarkdownFiles(config.paths, configDir);
+        entries = files.map((f) => ({ file: f, headings: [], lines: 0, summary: "" }));
       }
 
-      const indexPath = join(configDir, config.index);
-      const { chunks } = loadPersistedIndex(indexPath, config);
-
-      const fileChunks = chunks.filter((c) => c.file === file);
-      if (fileChunks.length === 0) {
-        console.error(`No chunks found for "${file}". Run \`refdocs list\` to see indexed files.`);
-        process.exit(1);
+      for (const entry of entries) {
+        const detail = entry.headings.length > 0
+          ? ` (${entry.headings.length} heading${entry.headings.length !== 1 ? "s" : ""}, ${entry.lines} lines)`
+          : "";
+        console.log(`${label}${entry.file}${detail}`);
       }
-
-      console.log(`${file}: ${fileChunks.length} chunk${fileChunks.length !== 1 ? "s" : ""}\n`);
-      for (const chunk of fileChunks) {
-        console.log(`  [${chunk.startLine}-${chunk.endLine}] ${chunk.headings} (~${chunk.tokenEstimate} tokens)`);
-      }
+      console.log(`\n${entries.length} files total`);
     } catch (err) {
       console.error((err as Error).message);
       process.exit(1);
@@ -218,7 +111,7 @@ program
 interface AddOpts {
   path?: string;
   branch?: string;
-  index: boolean;
+  manifest: boolean;
   global?: boolean;
 }
 
@@ -227,7 +120,7 @@ program
   .description("Add docs from a local path or GitHub URL")
   .option("--path <dir>", "override local storage directory")
   .option("--branch <branch>", "override branch detection from URL")
-  .option("--no-index", "skip auto re-indexing after download")
+  .option("--no-manifest", "skip auto manifest generation after download")
   .option("-g, --global", "store docs in global ~/.refdocs/ directory")
   .action(async (source: string, opts: AddOpts) => {
     try {
@@ -254,7 +147,7 @@ program
         const cwd = process.cwd();
         if (!configExists(cwd)) {
           initConfig(cwd);
-          console.log("Initialized .refdocs.json with default configuration.");
+          console.log(`Initialized ${CONFIG_DIR_NAME}/${CONFIG_FILENAME} with default configuration.`);
         }
         ({ config, configDir } = loadConfig());
       }
@@ -274,15 +167,15 @@ program
           console.log(`Source: ${result.source.owner}/${result.source.repo} (${result.source.branch})`);
         }
 
-        if (opts.index && result.filesWritten > 0) {
-          reindex(opts.global, label);
+        if (opts.manifest && result.filesWritten > 0) {
+          regenerateManifest(opts.global, label);
         }
       } else {
-        const result = addLocalPath(source, configDir, config);
+        const result = addLocalPath(source, configDir, config, process.cwd());
         console.log(`Added ${result.localPath} to paths`);
 
-        if (opts.index) {
-          reindex(opts.global, label);
+        if (opts.manifest) {
+          regenerateManifest(opts.global, label);
         }
       }
     } catch (err) {
@@ -293,10 +186,10 @@ program
 
 program
   .command("update")
-  .description("Re-pull all tracked sources and re-index")
-  .option("--no-index", "skip auto re-indexing after update")
+  .description("Re-pull all tracked sources and regenerate manifest")
+  .option("--no-manifest", "skip auto manifest generation after update")
   .option("-g, --global", "update global sources")
-  .action(async (opts: { index: boolean; global?: boolean }) => {
+  .action(async (opts: { manifest: boolean; global?: boolean }) => {
     try {
       let config, configDir;
       if (opts.global) {
@@ -323,8 +216,8 @@ program
       const totalFiles = results.reduce((sum, r) => sum + r.filesWritten, 0);
       console.log(`\n${results.length} source${results.length !== 1 ? "s" : ""} updated (${totalFiles} files total)`);
 
-      if (opts.index && totalFiles > 0) {
-        reindex(opts.global, label);
+      if (opts.manifest && totalFiles > 0) {
+        regenerateManifest(opts.global, label);
       }
     } catch (err) {
       console.error((err as Error).message);
@@ -334,10 +227,10 @@ program
 
 program
   .command("remove <path>")
-  .description("Remove a path from the index configuration")
-  .option("--no-index", "skip auto re-indexing after removal")
+  .description("Remove a path from the configuration")
+  .option("--no-manifest", "skip auto manifest generation after removal")
   .option("-g, --global", "remove from global config")
-  .action((path: string, opts: { index: boolean; global?: boolean }) => {
+  .action((path: string, opts: { manifest: boolean; global?: boolean }) => {
     try {
       let config, configDir;
       if (opts.global) {
@@ -352,7 +245,8 @@ program
         ({ config, configDir } = loadConfig());
       }
 
-      const result = removePath(path, configDir, config);
+      const projectDir = opts.global ? configDir : dirname(configDir);
+      const result = removePath(path, configDir, config, projectDir);
 
       if (!result.removed) {
         console.error(`Path "${path}" not found in configured paths.`);
@@ -365,8 +259,8 @@ program
         console.log(`${label}Removed associated source`);
       }
 
-      if (opts.index) {
-        reindex(opts.global, label);
+      if (opts.manifest) {
+        regenerateManifest(opts.global, label);
       }
     } catch (err) {
       console.error((err as Error).message);
@@ -374,32 +268,23 @@ program
     }
   });
 
-import type { IndexSummary } from "./types.js";
-
-function printIndexSummary(summary: IndexSummary, label: string) {
-  console.log(`${label}Indexed ${summary.filesIndexed} files → ${summary.chunksCreated} chunks`);
-  if (summary.unchanged !== undefined) {
-    console.log(`${label}(${summary.unchanged} unchanged, ${summary.changed} changed, ${summary.added} added, ${summary.removed} removed)`);
-  }
-  console.log(`Index size: ${(summary.indexSizeBytes / 1024).toFixed(1)} KB`);
-  console.log(`Done in ${summary.elapsedMs}ms`);
+function printManifestSummary(manifest: Manifest, label: string) {
+  console.log(`${label}Manifest: ${manifest.files} files, ${manifest.sources} sources`);
 }
 
-function reindex(global: boolean | undefined, label: string) {
+function regenerateManifest(global: boolean | undefined, label: string) {
   if (global) {
     const freshGlobal = loadGlobalConfig();
     if (freshGlobal) {
-      const summary = buildAndPersistIndex(freshGlobal.config, freshGlobal.configDir);
-      printIndexSummary(summary, label);
+      const manifest = buildAndPersistManifest(freshGlobal.config, freshGlobal.configDir);
+      printManifestSummary(manifest, label);
     }
   } else {
     const { config: freshConfig, configDir: freshDir } = loadConfig();
-    const summary = buildAndPersistIndex(freshConfig, freshDir);
-    printIndexSummary(summary, "");
+    const manifest = buildAndPersistManifest(freshConfig, freshDir);
+    printManifestSummary(manifest, "");
   }
 }
-
-import type { Source } from "./types.js";
 
 function formatSourceDescription(source: Source): string {
   switch (source.type) {
@@ -408,86 +293,6 @@ function formatSourceDescription(source: Source): string {
     case "file":
       return source.url;
   }
-}
-
-function resolveIndexSources(): IndexSource[] {
-  const sources: IndexSource[] = [];
-
-  try {
-    const { config, configDir } = loadConfig();
-    const indexPath = join(configDir, config.index);
-    const { index, chunkMap } = loadPersistedIndex(indexPath, config);
-    sources.push({ label: "", index, chunkMap });
-  } catch {
-    // Local index not available
-  }
-
-  const globalConfig = loadGlobalConfig();
-  if (globalConfig) {
-    const globalIndexPath = join(globalConfig.configDir, globalConfig.config.index);
-    if (existsSync(globalIndexPath)) {
-      try {
-        const { index, chunkMap } = loadPersistedIndex(globalIndexPath, globalConfig.config);
-        sources.push({ label: "[global] ", index, chunkMap });
-      } catch {
-        // Global index failed to load
-      }
-    }
-  }
-
-  return sources;
-}
-
-function formatResults(results: SearchResult[]) {
-  results.forEach((r, i) => {
-    console.log(`# [${i + 1}] ${r.file}:${r.lines[0]}-${r.lines[1]}`);
-    console.log(`# ${r.headings.join(" > ")}`);
-    console.log("");
-    console.log(r.body);
-    if (i < results.length - 1) {
-      console.log("\n---\n");
-    }
-  });
-}
-
-function formatEvalReport(report: ReturnType<typeof runEvalSuite>) {
-  console.log(`Eval suite: ${report.suite.name ?? "unnamed"} (${report.summary.totalCases} case${report.summary.totalCases !== 1 ? "s" : ""})`);
-  if (report.suite.description) {
-    console.log(report.suite.description);
-  }
-  console.log(`Results/query: ${report.maxResults}`);
-  console.log("");
-  console.log("Summary");
-  console.log("Metric                          Baseline     Reranked");
-  console.log(`Full coverage rate             ${formatPercent(report.summary.baseline.fullCoverageRate).padEnd(12)} ${formatPercent(report.summary.reranked.fullCoverageRate)}`);
-  console.log(`Average coverage ratio         ${formatPercent(report.summary.baseline.averageCoverageRatio).padEnd(12)} ${formatPercent(report.summary.reranked.averageCoverageRatio)}`);
-  console.log(`Avg tokens to first facet      ${formatNumber(report.summary.baseline.averageTokensToFirstFacet).padEnd(12)} ${formatNumber(report.summary.reranked.averageTokensToFirstFacet)}`);
-  console.log(`Avg tokens to full coverage    ${formatNumber(report.summary.baseline.averageTokensToFullCoverage).padEnd(12)} ${formatNumber(report.summary.reranked.averageTokensToFullCoverage)}`);
-  console.log(`Median tokens to full coverage ${formatNumber(report.summary.baseline.medianTokensToFullCoverage).padEnd(12)} ${formatNumber(report.summary.reranked.medianTokensToFullCoverage)}`);
-  console.log("");
-  console.log(`Verdict (reranked vs baseline): ${report.summary.wins} win / ${report.summary.ties} tie / ${report.summary.losses} loss`);
-  console.log("");
-  console.log("Per-case");
-  for (const caseResult of report.cases) {
-    const bCoverage = `${Math.round(caseResult.baseline.coverageRatio * 100)}%`;
-    const rCoverage = `${Math.round(caseResult.reranked.coverageRatio * 100)}%`;
-    const bTokens = formatNumber(caseResult.baseline.tokensToFullCoverage);
-    const rTokens = formatNumber(caseResult.reranked.tokensToFullCoverage);
-    console.log(
-      `- ${caseResult.id}: ${caseResult.verdict} | coverage ${bCoverage} -> ${rCoverage} | tokens_to_full ${bTokens} -> ${rTokens}`
-    );
-  }
-}
-
-function formatPercent(value: number): string {
-  return `${(value * 100).toFixed(1)}%`;
-}
-
-function formatNumber(value: number | null): string {
-  if (value === null || Number.isNaN(value)) {
-    return "n/a";
-  }
-  return Math.round(value).toString();
 }
 
 program.parse();
