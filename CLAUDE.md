@@ -194,6 +194,7 @@ JSON output (`--json`) returns:
 
 ## Code Style
 
+- Prefer fixing root causes over patching symptoms. If a workaround is needed, explain why the structural fix isn't feasible.
 - TypeScript strict mode, no `any`
 - Pure functions where possible, side effects at the edges (CLI entrypoint, file I/O)
 - No classes unless genuinely needed — prefer modules with exported functions
