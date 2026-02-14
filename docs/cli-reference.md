@@ -1,6 +1,6 @@
 # CLI Reference
 
-## Global options
+## Options
 
 ```
 refdocs --help     Show help
@@ -15,18 +15,11 @@ Create a `.refdocs/config.json` config file with default settings.
 
 ```bash
 refdocs init
-refdocs init -g
 ```
-
-**Options:**
-
-| Flag | Description |
-|------|-------------|
-| `-g, --global` | Create global config at `~/.refdocs/` |
 
 **Behavior:**
 
-- Creates `.refdocs/config.json` in the current directory (or `~/.refdocs/config.json` with `-g`)
+- Creates `.refdocs/config.json` in the current directory
 - Includes all default values: `paths`, `manifest`
 - If `.refdocs/config.json` already exists, exits with an error
 
@@ -40,14 +33,7 @@ Generate the documentation manifest from all markdown files in configured paths.
 
 ```bash
 refdocs manifest
-refdocs manifest -g
 ```
-
-**Options:**
-
-| Flag | Description |
-|------|-------------|
-| `-g, --global` | Generate manifest for global config |
 
 **Output:**
 
@@ -71,14 +57,7 @@ List all documented files and their heading counts.
 
 ```bash
 refdocs list
-refdocs list -g
 ```
-
-**Options:**
-
-| Flag | Description |
-|------|-------------|
-| `-g, --global` | List global documented files |
 
 **Output:**
 
@@ -110,9 +89,6 @@ refdocs add ./my-docs --no-manifest
 refdocs add https://github.com/laravel/docs --branch 11.x
 refdocs add https://github.com/statamic/docs/tree/6.x/content
 refdocs add https://github.com/owner/repo --path docs/custom --no-manifest
-
-# Global
-refdocs add https://github.com/org/docs -g
 ```
 
 **Arguments:**
@@ -128,7 +104,6 @@ refdocs add https://github.com/org/docs -g
 | `--path <dir>` | `docs/{owner}/{repo}` | Override local storage directory (GitHub URLs only) |
 | `--branch <branch>` | from URL or `HEAD` | Override branch detection (GitHub URLs only) |
 | `--no-manifest` | `false` | Skip auto manifest generation after adding |
-| `-g, --global` | `false` | Store docs in global `~/.refdocs/` directory |
 
 **Local paths:**
 
@@ -174,7 +149,6 @@ Remove a path from the configuration.
 ```bash
 refdocs remove docs/laravel
 refdocs remove ./my-docs --no-manifest
-refdocs remove docs/laravel -g
 ```
 
 **Arguments:**
@@ -188,7 +162,6 @@ refdocs remove docs/laravel -g
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--no-manifest` | `false` | Skip auto manifest generation after removal |
-| `-g, --global` | `false` | Remove from global config |
 
 **Behavior:**
 
@@ -210,7 +183,6 @@ Re-pull all tracked sources from GitHub and regenerate the manifest.
 ```bash
 refdocs update
 refdocs update --no-manifest
-refdocs update -g
 ```
 
 **Options:**
@@ -218,7 +190,6 @@ refdocs update -g
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--no-manifest` | `false` | Skip auto manifest generation after update |
-| `-g, --global` | `false` | Update global sources |
 
 **Output:**
 

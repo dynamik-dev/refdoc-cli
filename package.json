@@ -1,6 +1,6 @@
 {
   "name": "@dynamik-dev/refdocs",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "type": "module",
   "description": "Local CLI tool that fetches, organizes, and catalogs markdown documentation for LLM-assisted development",
   "main": "dist/index.js",

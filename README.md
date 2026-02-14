@@ -41,12 +41,10 @@ The manifest (`.refdocs/manifest.json`) gives your agent a ~500 token map of all
 ```bash
 # Setup
 refdocs init                              # create .refdocs/config.json with defaults
-refdocs init -g                           # create global config at ~/.refdocs/
 
 # Add sources
 refdocs add ./docs                        # local directory
 refdocs add https://github.com/org/repo   # GitHub repo (downloads markdown files)
-refdocs add <source> -g                   # add to global ~/.refdocs/ store
 
 # Catalog
 refdocs manifest                          # generate the manifest
@@ -97,15 +95,6 @@ refdocs remove docs/laravel               # remove a path from config
 | GitHub URL | Downloads `.md` files from the repo tarball |
 
 GitHub sources are tracked in `.refdocs/config.json` and can be re-pulled with `refdocs update`.
-
-## Global docs
-
-Use `-g` / `--global` to store docs in `~/.refdocs/` — useful for references you want across all projects.
-
-```bash
-refdocs init -g
-refdocs add https://github.com/org/docs -g
-```
 
 ## Configuration
 

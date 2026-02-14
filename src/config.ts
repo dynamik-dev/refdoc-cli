@@ -1,6 +1,5 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
-import { homedir } from "node:os";
 import type { RefdocsConfig } from "./types.js";
 
 export const CONFIG_DIR_NAME = ".refdocs";
@@ -107,33 +106,4 @@ export function saveConfig(config: Partial<RefdocsConfig>, configDir: string): v
   }
   const merged = { ...existing, ...config };
   writeFileSync(configPath, JSON.stringify(merged, null, 2) + "\n", "utf-8");
-}
-
-export function getGlobalConfigDir(globalDir?: string): string {
-  return globalDir ?? join(homedir(), ".refdocs");
-}
-
-export function initGlobalConfig(globalDir?: string): void {
-  const dir = getGlobalConfigDir(globalDir);
-  mkdirSync(dir, { recursive: true });
-  const configPath = join(dir, CONFIG_FILENAME);
-  if (existsSync(configPath)) return;
-  writeFileSync(configPath, JSON.stringify(DEFAULT_CONFIG, null, 2) + "\n", "utf-8");
-}
-
-export function loadGlobalConfig(globalDir?: string): ConfigResult | null {
-  const dir = getGlobalConfigDir(globalDir);
-  const configPath = join(dir, CONFIG_FILENAME);
-  if (!existsSync(configPath)) return null;
-  try {
-    const raw = JSON.parse(readFileSync(configPath, "utf-8"));
-    const errors = validateConfig(raw);
-    if (errors.length > 0) return null;
-    return {
-      config: mergeWithDefaults(raw),
-      configDir: dir,
-    };
-  } catch {
-    return null;
-  }
 }
